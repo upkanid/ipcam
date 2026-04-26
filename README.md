@@ -37,6 +37,17 @@ Download the latest release for your platform:
 
 → **[Releases](../../releases)**
 
+### macOS — first launch
+
+The app is ad-hoc signed but not notarized (no Apple Developer certificate). On first open macOS will show an "unidentified developer" warning:
+
+> Right-click (or Control-click) the app → **Open** → **Open**
+
+Alternatively, run once in Terminal to clear the quarantine flag:
+```bash
+xattr -cr "/Applications/IPCam Upkan.app"
+```
+
 ### Usage
 
 1. Open **IPCam Upkan** on your desktop.

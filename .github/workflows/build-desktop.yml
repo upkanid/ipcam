@@ -48,6 +48,21 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           SKIP_NOTARIZE: true
 
+      - name: Ad-hoc codesign + repackage DMG (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          APP=$(find apps/desktop/dist -maxdepth 2 -name "*.app" | head -1)
+          echo "Signing: $APP"
+          codesign --deep --force --sign - "$APP"
+          DMG=$(find apps/desktop/dist -maxdepth 1 -name "*.dmg" | head -1)
+          echo "Replacing: $DMG"
+          rm -f "$DMG"
+          hdiutil create \
+            -volname "IPCam Upkan" \
+            -srcfolder "$APP" \
+            -ov -format UDZO \
+            "$DMG"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
