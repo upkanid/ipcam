@@ -9,8 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm install
 
 # Development
+pnpm dev              # Run both apps in parallel (web + desktop)
 pnpm dev:web          # React Router v7 web app (localhost:5173)
-pnpm dev:desktop      # Electron app with HMR
+pnpm dev:desktop      # Electron app with HMR (renderer on localhost:5174)
 
 # Build
 pnpm build:web
@@ -30,8 +31,8 @@ pnpm --filter desktop <script>
 **Monorepo** (pnpm workspaces) with two apps:
 
 ```
-apps/web/       — React Router v7, SSR mode, deployed via Docker to Coolify
-apps/desktop/   — Electron + React + electron-vite
+apps/web/       — React Router v7, SSR mode, deployed via Docker to Coolify  (dev port 5173)
+apps/desktop/   — Electron + React + electron-vite                            (renderer dev port 5174)
 ```
 
 ### Core flow

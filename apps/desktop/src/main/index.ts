@@ -1,36 +1,35 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { networkInterfaces } from 'os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { createSignalingServer } from './signaling'
+import { createSignalingServer, getLocalIP } from './signaling'
 
-let mainWindow: BrowserWindow | null = null
+let stopSignaling: () => void
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+  const win = new BrowserWindow({
+    width: 960,
+    height: 640,
+    minWidth: 760,
+    minHeight: 520,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
+      sandbox: false,
+    },
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow!.show()
-  })
+  win.on('ready-to-show', () => win.show())
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
     return { action: 'deny' }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
@@ -41,26 +40,22 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.handle('get-local-ip', () => {
-    const nets = networkInterfaces()
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name] ?? []) {
-        if (net.family === 'IPv4' && !net.internal) return net.address
-      }
-    }
-    return '127.0.0.1'
+  ipcMain.handle('get-local-ip', () => getLocalIP())
+
+  ipcMain.handle('restart-signaling', (_, port: number) => {
+    if (stopSignaling) stopSignaling()
+    stopSignaling = createSignalingServer(port)
+    return port
   })
 
+  stopSignaling = createSignalingServer(3717)
   createWindow()
-  createSignalingServer()
 
-  app.on('activate', function () {
+  app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })

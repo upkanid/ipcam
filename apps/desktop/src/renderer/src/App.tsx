@@ -1,44 +1,85 @@
 import { useEffect, useRef, useState } from 'react'
+import QRCode from 'qrcode'
 
-const SIGNALING_PORT = 3717
+const DEFAULT_PORT = 3717
+const DEFAULT_HOST = 'https://ipcam.upkan.id'
+
+type Status = 'idle' | 'waiting' | 'connected'
+
+declare global {
+  interface Window {
+    api: {
+      getLocalIP: () => Promise<string>
+      restartSignaling: (port: number) => Promise<number>
+    }
+  }
+}
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
-  const [localIP, setLocalIP] = useState<string>('...')
-  const [status, setStatus] = useState<'idle' | 'waiting' | 'connected'>('idle')
+
+  const [localIP, setLocalIP] = useState('—')
+  const [status, setStatus] = useState<Status>('idle')
+  const [muted, setMuted] = useState(true)
+  const [volume, setVolume] = useState(0.8)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Settings state
+  const [port, setPort] = useState(DEFAULT_PORT)
+  const [portInput, setPortInput] = useState(String(DEFAULT_PORT))
+  const [hostUrl, setHostUrl] = useState(DEFAULT_HOST)
+  const [hostInput, setHostInput] = useState(DEFAULT_HOST)
 
   useEffect(() => {
-    // Get local IP from main process
-    window.api?.getLocalIP().then((ip: string) => setLocalIP(ip))
+    window.api?.getLocalIP().then(setLocalIP)
   }, [])
 
+  // Sync audio to video element (React muted prop doesn't update reactively)
+  useEffect(() => {
+    if (!videoRef.current) return
+    videoRef.current.muted = muted
+    videoRef.current.volume = volume
+  }, [muted, volume])
+
+  // Generate QR whenever IP, port, or host changes
+  useEffect(() => {
+    if (localIP === '—') return
+    const shareUrl = `${hostUrl}/share?ip=${localIP}&port=${port}`
+    QRCode.toDataURL(shareUrl, {
+      width: 200,
+      margin: 1,
+      color: { dark: '#00e87a', light: '#0a0a0a' },
+    }).then(setQrDataUrl)
+  }, [localIP, port, hostUrl])
+
   function startReceiving() {
-    const ws = new WebSocket(`ws://localhost:${SIGNALING_PORT}`)
+    const ws = new WebSocket(`ws://localhost:${port}`)
     wsRef.current = ws
     setStatus('waiting')
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     })
     pcRef.current = pc
 
-    pc.ontrack = (event) => {
+    pc.ontrack = (ev) => {
       if (videoRef.current) {
-        videoRef.current.srcObject = event.streams[0]
+        videoRef.current.srcObject = ev.streams[0]
         setStatus('connected')
       }
     }
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        ws.send(JSON.stringify({ type: 'candidate', payload: event.candidate }))
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'candidate', payload: ev.candidate }))
       }
     }
 
-    ws.onmessage = async (event) => {
-      const msg = JSON.parse(event.data)
+    ws.onmessage = async (ev) => {
+      const msg = JSON.parse(ev.data)
       if (msg.type === 'offer') {
         await pc.setRemoteDescription(new RTCSessionDescription(msg.payload))
         const answer = await pc.createAnswer()
@@ -48,6 +89,8 @@ export default function App() {
         await pc.addIceCandidate(new RTCIceCandidate(msg.payload))
       }
     }
+
+    ws.onerror = () => setStatus('idle')
   }
 
   function stop() {
@@ -57,35 +100,473 @@ export default function App() {
     setStatus('idle')
   }
 
+  async function applySettings() {
+    const newPort = parseInt(portInput)
+    if (isNaN(newPort) || newPort < 1024 || newPort > 65535) return
+    if (status !== 'idle') stop()
+    await window.api?.restartSignaling(newPort)
+    setPort(newPort)
+    setHostUrl(hostInput)
+    setShowSettings(false)
+  }
+
   return (
-    <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
-      <h1>IPCam Upkan</h1>
+    <div style={s.root}>
+      {/* ── Header ──────────────────────────────────────── */}
+      <header style={s.header}>
+        <span style={s.headerLogo}>IPCAM_UPKAN</span>
 
-      <div style={{ marginBottom: 16 }}>
-        <p>
-          Buka <strong>web app</strong> di HP dan masukkan IP ini:
-        </p>
-        <code style={{ fontSize: 20, background: '#f0f0f0', padding: '4px 12px', borderRadius: 4 }}>
-          {localIP}:{SIGNALING_PORT}
-        </code>
-      </div>
+        <div style={s.headerCenter}>
+          <StatusPill status={status} />
+        </div>
 
-      <div style={{ marginBottom: 16 }}>
-        {status === 'idle' && <button onClick={startReceiving}>Start Receiving</button>}
-        {(status === 'waiting' || status === 'connected') && (
-          <button onClick={stop}>Stop</button>
-        )}
-        <span style={{ marginLeft: 12, color: status === 'connected' ? 'green' : 'gray' }}>
-          {status === 'idle' ? '' : status === 'waiting' ? 'Menunggu koneksi...' : 'Terhubung'}
-        </span>
-      </div>
+        <div style={s.headerRight}>
+          <button
+            onClick={() => setShowSettings((v) => !v)}
+            style={{
+              ...s.iconBtn,
+              color: showSettings ? 'var(--accent)' : 'var(--text-muted)',
+              borderColor: showSettings ? 'var(--accent)' : 'var(--border-bright)',
+            }}
+            title="Settings"
+          >
+            ⚙
+          </button>
+          {status !== 'idle' && (
+            <button onClick={stop} style={s.stopBtn}>
+              ■ STOP
+            </button>
+          )}
+        </div>
+      </header>
 
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        style={{ width: '100%', maxWidth: 640, background: '#000', borderRadius: 8 }}
-      />
+      {/* ── Main ─────────────────────────────────────────── */}
+      <main style={s.main}>
+
+        {/* ── Left: Monitor ─────────────────────────────── */}
+        <div style={s.monitorWrap}>
+          <div style={s.monitor}>
+            {/* Subtle grid */}
+            <div style={s.monitorGrid} aria-hidden />
+
+            {/* Scanline while not streaming */}
+            {status !== 'connected' && <div style={s.scanline} aria-hidden />}
+
+            {/* Video */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              style={{ ...s.video, opacity: status === 'connected' ? 1 : 0 }}
+            />
+
+            {/* QR / Idle overlay */}
+            {status !== 'connected' && (
+              <div style={s.monitorOverlay}>
+                {qrDataUrl ? (
+                  <>
+                    <div style={s.qrWrap}>
+                      <img src={qrDataUrl} width={160} height={160} alt="QR" style={{ display: 'block' }} />
+                    </div>
+                    <span style={s.qrLabel}>
+                      {status === 'idle' ? 'SCAN DI HP UNTUK CONNECT' : 'WAITING FOR CONNECTION...'}
+                    </span>
+                    <span style={{ ...s.qrSub, animation: status === 'waiting' ? 'blink 1.1s step-end infinite' : 'none' }}>
+                      {localIP}:{port}
+                    </span>
+                  </>
+                ) : (
+                  <span style={s.qrLabel}>MEMUAT...</span>
+                )}
+              </div>
+            )}
+
+            {/* Connected overlays */}
+            {status === 'connected' && (
+              <>
+                {(['tl', 'tr', 'bl', 'br'] as const).map((p) => (
+                  <Corner key={p} pos={p} />
+                ))}
+                <div style={s.recBadge}>
+                  <span style={{ ...s.recDot, animation: 'blink 1.2s step-end infinite' }} />
+                  <span style={s.recText}>REC</span>
+                </div>
+                {muted && (
+                  <div style={s.mutedBadge}>⊘ MUTED</div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Monitor footer */}
+          <div style={s.monitorFooter}>
+            {[
+              ['SRC', 'PHONE / WebRTC'],
+              ['CODEC', 'H.264 / VP9'],
+              ['PORT', String(port)],
+            ].map(([label, value], i) => (
+              <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {i > 0 && <span style={s.mfSep} />}
+                <span style={s.mfLabel}>{label}</span>
+                <span style={s.mfValue}>{value}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right: Panel ──────────────────────────────── */}
+        <aside style={s.panel}>
+
+          {showSettings ? (
+            <SettingsPanel
+              portInput={portInput}
+              setPortInput={setPortInput}
+              hostInput={hostInput}
+              setHostInput={setHostInput}
+              onApply={applySettings}
+              onCancel={() => {
+                setPortInput(String(port))
+                setHostInput(hostUrl)
+                setShowSettings(false)
+              }}
+            />
+          ) : (
+            <>
+              <SignalBars status={status} />
+              <div style={s.panelDivider} />
+
+              {/* Signal source */}
+              <div style={s.section}>
+                <p style={s.sectionLabel}>// SIGNAL SOURCE</p>
+                <div style={s.ipBlock}>
+                  <span style={s.ipAddress}>{localIP}</span>
+                  <span style={s.ipPort}>:{port}</span>
+                </div>
+                <p style={s.ipHint}>
+                  Scan QR atau buka{' '}
+                  <span style={{ color: 'var(--accent)' }}>{hostUrl}/share</span>{' '}
+                  di HP dan masukkan IP di atas.
+                </p>
+              </div>
+
+              <div style={s.panelDivider} />
+
+              {/* Audio */}
+              <div style={s.section}>
+                <p style={s.sectionLabel}>// AUDIO OUTPUT</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={s.rowLabel}>SPEAKER</span>
+                  <button
+                    onClick={() => setMuted((m) => !m)}
+                    style={{
+                      ...s.toggleBtn,
+                      color: muted ? 'var(--danger)' : 'var(--accent)',
+                      borderColor: muted ? 'var(--danger)' : 'var(--accent)',
+                    }}
+                  >
+                    {muted ? '⊘ MUTED' : '♪ LIVE'}
+                  </button>
+                </div>
+                {!muted && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={s.rowLabel}>VOL</span>
+                    <input
+                      type="range" min={0} max={1} step={0.01}
+                      value={volume}
+                      onChange={(e) => setVolume(Number(e.target.value))}
+                      style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                    />
+                    <span style={{ ...s.rowLabel, minWidth: 28, textAlign: 'right' }}>
+                      {Math.round(volume * 100)}%
+                    </span>
+                  </div>
+                )}
+                {muted && (
+                  <p style={s.ipHint}>Muted by default — cegah feedback saat dev di mesin yang sama.</p>
+                )}
+              </div>
+
+              <div style={s.panelDivider} />
+
+              {/* Status */}
+              <div style={s.section}>
+                <p style={s.sectionLabel}>// STATUS</p>
+                <StatusDetail status={status} />
+              </div>
+
+              <div style={{ flex: 1 }} />
+
+              {status === 'idle' && (
+                <button onClick={startReceiving} style={s.startBtn}>
+                  → START RECEIVING
+                </button>
+              )}
+
+              <div style={s.panelFooter}>
+                <span>PORT {port}</span>
+                <span>·</span>
+                <span>LAN ONLY</span>
+                <span>·</span>
+                <span>0.0.0.0</span>
+              </div>
+            </>
+          )}
+        </aside>
+      </main>
     </div>
   )
+}
+
+/* ── Settings Panel ─────────────────────────────────────── */
+
+function SettingsPanel({
+  portInput, setPortInput,
+  hostInput, setHostInput,
+  onApply, onCancel,
+}: {
+  portInput: string
+  setPortInput: (v: string) => void
+  hostInput: string
+  setHostInput: (v: string) => void
+  onApply: () => void
+  onCancel: () => void
+}) {
+  const portNum = parseInt(portInput)
+  const portValid = !isNaN(portNum) && portNum >= 1024 && portNum <= 65535
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%' }}>
+      <p style={{ ...s.sectionLabel, marginBottom: 20 }}>// SETTINGS</p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Port */}
+        <div style={s.settingRow}>
+          <label style={s.settingLabel}>
+            SIGNALING PORT
+            <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 9 }}> (1024–65535)</span>
+          </label>
+          <input
+            type="number"
+            value={portInput}
+            onChange={(e) => setPortInput(e.target.value)}
+            min={1024}
+            max={65535}
+            style={{
+              ...s.settingInput,
+              borderColor: portValid ? 'var(--border-bright)' : 'var(--danger)',
+            }}
+            onFocus={(e) => { if (portValid) e.target.style.borderColor = 'var(--accent)' }}
+            onBlur={(e) => { e.target.style.borderColor = portValid ? 'var(--border-bright)' : 'var(--danger)' }}
+          />
+          {!portValid && portInput !== '' && (
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--danger)', letterSpacing: '0.05em' }}>
+              Port tidak valid
+            </span>
+          )}
+        </div>
+
+        {/* Host URL */}
+        <div style={s.settingRow}>
+          <label style={s.settingLabel}>
+            WEB APP URL
+            <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 9 }}> (untuk QR)</span>
+          </label>
+          <input
+            type="url"
+            value={hostInput}
+            onChange={(e) => setHostInput(e.target.value)}
+            placeholder="https://ipcam.upkan.id"
+            style={s.settingInput}
+            onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
+            onBlur={(e) => { e.target.style.borderColor = 'var(--border-bright)' }}
+          />
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.04em', lineHeight: 1.6 }}>
+            URL yang di-encode ke QR code. Ubah ke{' '}
+            <span style={{ color: 'var(--text)' }}>http://&lt;ip&gt;:5173</span>{' '}
+            saat dev lokal.
+          </p>
+        </div>
+      </div>
+
+      <div style={{ flex: 1 }} />
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={onApply}
+          disabled={!portValid}
+          style={{
+            ...s.startBtn,
+            flex: 1,
+            marginBottom: 0,
+            opacity: portValid ? 1 : 0.4,
+            cursor: portValid ? 'pointer' : 'not-allowed',
+          }}
+        >
+          APPLY
+        </button>
+        <button onClick={onCancel} style={{ ...s.stopBtn, padding: '11px 16px', marginBottom: 0 }}>
+          CANCEL
+        </button>
+      </div>
+
+      <div style={{ height: 16 }} />
+      <div style={s.panelFooter}>
+        <span>PORT CHANGE RESTARTS SERVER</span>
+      </div>
+    </div>
+  )
+}
+
+/* ── Sub-components ─────────────────────────────────────── */
+
+function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+  const base: React.CSSProperties = {
+    position: 'absolute', width: 22, height: 22,
+    borderColor: 'var(--accent)', borderStyle: 'solid', borderWidth: 0, opacity: 0.8,
+  }
+  const map: Record<string, React.CSSProperties> = {
+    tl: { top: 14, left: 14, borderTopWidth: 2, borderLeftWidth: 2 },
+    tr: { top: 14, right: 14, borderTopWidth: 2, borderRightWidth: 2 },
+    bl: { bottom: 14, left: 14, borderBottomWidth: 2, borderLeftWidth: 2 },
+    br: { bottom: 14, right: 14, borderBottomWidth: 2, borderRightWidth: 2 },
+  }
+  return <span aria-hidden style={{ ...base, ...map[pos] }} />
+}
+
+function StatusPill({ status }: { status: Status }) {
+  const colors: Record<Status, string> = {
+    idle: 'var(--text-muted)', waiting: 'var(--warning)', connected: 'var(--accent)',
+  }
+  const labels: Record<Status, string> = {
+    idle: 'OFFLINE', waiting: 'WAITING', connected: 'CONNECTED',
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{
+        width: 7, height: 7, borderRadius: '50%', background: colors[status], display: 'inline-block',
+        animation: status === 'connected' ? 'pulse-ring 2s ease infinite' : status === 'waiting' ? 'blink 0.9s step-end infinite' : 'none',
+      }} />
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: colors[status], letterSpacing: '0.16em' }}>
+        {labels[status]}
+      </span>
+    </div>
+  )
+}
+
+function StatusDetail({ status }: { status: Status }) {
+  const rows: Record<Status, { label: string; value: string; accent?: boolean }[]> = {
+    idle: [
+      { label: 'STREAM', value: 'INACTIVE' },
+      { label: 'PEERS', value: '0' },
+      { label: 'ICE', value: 'NOT STARTED' },
+    ],
+    waiting: [
+      { label: 'STREAM', value: 'PENDING', accent: true },
+      { label: 'PEERS', value: '0' },
+      { label: 'ICE', value: 'GATHERING', accent: true },
+    ],
+    connected: [
+      { label: 'STREAM', value: 'ACTIVE', accent: true },
+      { label: 'PEERS', value: '1', accent: true },
+      { label: 'ICE', value: 'CONNECTED', accent: true },
+    ],
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows[status].map(({ label, value, accent }) => (
+        <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label}</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: accent ? 'var(--accent)' : 'var(--text-muted)', letterSpacing: '0.1em' }}>{value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SignalBars({ status }: { status: Status }) {
+  const count = 12
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 32 }}>
+      {Array.from({ length: count }).map((_, i) => {
+        const active = status === 'connected'
+        const waiting = status === 'waiting'
+        const delay = `${(i * 0.06).toFixed(2)}s`
+        const h = 8 + (i / count) * 24
+        return (
+          <div key={i} style={{
+            width: 3, height: h,
+            background: active
+              ? i > count * 0.75 ? 'var(--danger)' : i > count * 0.5 ? 'var(--warning)' : 'var(--accent)'
+              : waiting ? 'var(--accent-dim)' : 'var(--border-bright)',
+            transformOrigin: 'bottom',
+            transition: 'background 0.3s',
+            animation: active
+              ? `bar-active ${0.4 + i * 0.03}s ${delay} ease-in-out infinite`
+              : waiting
+              ? `bar-idle ${0.6 + i * 0.04}s ${delay} ease-in-out infinite`
+              : 'none',
+          }} />
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Styles ─────────────────────────────────────────────── */
+
+const s: Record<string, React.CSSProperties> = {
+  root: { display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', overflow: 'hidden' },
+
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: 44, borderBottom: '1px solid var(--border)', flexShrink: 0 },
+  headerLogo: { fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.2em' },
+  headerCenter: { position: 'absolute', left: '50%', transform: 'translateX(-50%)' },
+  headerRight: { display: 'flex', alignItems: 'center', gap: 8, minWidth: 140, justifyContent: 'flex-end' },
+  iconBtn: { fontFamily: 'var(--mono)', fontSize: 13, background: 'transparent', border: '1px solid', padding: '4px 8px', cursor: 'pointer', transition: 'all 0.2s' },
+  stopBtn: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.14em', color: 'var(--danger)', background: 'transparent', border: '1px solid var(--danger)', padding: '5px 12px', cursor: 'pointer' },
+
+  main: { display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 },
+
+  monitorWrap: { flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', minWidth: 0 },
+  monitor: { flex: 1, position: 'relative', background: '#040604', overflow: 'hidden' },
+  video: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', transition: 'opacity 0.4s' },
+  monitorGrid: {
+    position: 'absolute', inset: 0,
+    backgroundImage: 'linear-gradient(rgba(0,232,122,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(0,232,122,0.018) 1px, transparent 1px)',
+    backgroundSize: '40px 40px', pointerEvents: 'none', zIndex: 1,
+  },
+  scanline: {
+    position: 'absolute', left: 0, right: 0, height: 1,
+    background: 'linear-gradient(90deg, transparent 0%, rgba(0,232,122,0.5) 40%, rgba(0,232,122,0.5) 60%, transparent 100%)',
+    pointerEvents: 'none', animation: 'scanline 5s linear infinite', zIndex: 3,
+  },
+  monitorOverlay: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, zIndex: 2 },
+  qrWrap: { padding: 8, background: '#0a0a0a', border: '1px solid var(--border-bright)' },
+  qrLabel: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.18em', textAlign: 'center' },
+  qrSub: { fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', letterSpacing: '0.08em' },
+  recBadge: { position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.65)', padding: '4px 10px', zIndex: 10 },
+  recDot: { width: 7, height: 7, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' },
+  recText: { fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text)', letterSpacing: '0.18em' },
+  mutedBadge: { position: 'absolute', bottom: 14, right: 14, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--danger)', letterSpacing: '0.14em', background: 'rgba(0,0,0,0.6)', padding: '3px 8px', zIndex: 10 },
+
+  monitorFooter: { display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', height: 32, borderTop: '1px solid var(--border)', flexShrink: 0 },
+  mfLabel: { fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.15em' },
+  mfValue: { fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text)', letterSpacing: '0.08em' },
+  mfSep: { width: 1, height: 12, background: 'var(--border-bright)', margin: '0 4px', flexShrink: 0 },
+
+  panel: { width: 264, flexShrink: 0, display: 'flex', flexDirection: 'column', padding: '20px 20px 16px', gap: 0, overflowY: 'auto' },
+  panelDivider: { height: 1, background: 'var(--border)', margin: '18px 0' },
+  section: { display: 'flex', flexDirection: 'column', gap: 12 },
+  sectionLabel: { fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.18em', textTransform: 'uppercase' },
+  rowLabel: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.12em' },
+  toggleBtn: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.14em', background: 'transparent', border: '1px solid', padding: '4px 10px', cursor: 'pointer', transition: 'all 0.2s' },
+  ipBlock: { display: 'flex', alignItems: 'baseline', padding: '14px 12px', background: 'var(--surface)', border: '1px solid var(--border-bright)' },
+  ipAddress: { fontFamily: 'var(--display)', fontSize: 28, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em' },
+  ipPort: { fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', letterSpacing: '0.04em', marginLeft: 2 },
+  ipHint: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6, letterSpacing: '0.04em' },
+  startBtn: { width: '100%', padding: '13px', background: 'var(--accent)', color: '#000', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', border: 'none', cursor: 'pointer', textTransform: 'uppercase', marginBottom: 16 },
+  panelFooter: { display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' },
+
+  settingRow: { display: 'flex', flexDirection: 'column', gap: 8 },
+  settingLabel: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.12em', display: 'flex', flexDirection: 'column', gap: 2 },
+  settingInput: { width: '100%', padding: '9px 12px', fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border-bright)', outline: 'none', letterSpacing: '0.05em', transition: 'border-color 0.2s' },
 }

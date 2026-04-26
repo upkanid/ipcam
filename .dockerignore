@@ -1,0 +1,9 @@
+.git
+.github
+**/node_modules
+**/.react-router
+**/build
+**/dist
+apps/desktop
+CLAUDE.md
+*.md

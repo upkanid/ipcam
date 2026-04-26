@@ -2,17 +2,14 @@ import { createServer } from 'http'
 import { WebSocketServer, WebSocket } from 'ws'
 import { networkInterfaces } from 'os'
 
-const PORT = 3717
-
 type SignalingMessage = {
-  type: 'offer' | 'answer' | 'candidate' | 'ready'
+  type: 'offer' | 'answer' | 'candidate'
   payload?: unknown
 }
 
-export function createSignalingServer(): void {
+export function createSignalingServer(port: number): () => void {
   const httpServer = createServer()
   const wss = new WebSocketServer({ server: httpServer })
-
   const peers = new Set<WebSocket>()
 
   wss.on('connection', (ws) => {
@@ -20,13 +17,8 @@ export function createSignalingServer(): void {
 
     ws.on('message', (data) => {
       let msg: SignalingMessage
-      try {
-        msg = JSON.parse(data.toString())
-      } catch {
-        return
-      }
+      try { msg = JSON.parse(data.toString()) } catch { return }
 
-      // Relay message to all other peers
       peers.forEach((peer) => {
         if (peer !== ws && peer.readyState === WebSocket.OPEN) {
           peer.send(JSON.stringify(msg))
@@ -34,24 +26,25 @@ export function createSignalingServer(): void {
       })
     })
 
-    ws.on('close', () => {
-      peers.delete(ws)
-    })
+    ws.on('close', () => peers.delete(ws))
   })
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    const ip = getLocalIP()
-    console.log(`Signaling server running at ws://${ip}:${PORT}`)
+  httpServer.listen(port, '0.0.0.0', () => {
+    console.log(`Signaling server ws://${getLocalIP()}:${port}`)
   })
+
+  return () => {
+    wss.close()
+    httpServer.close()
+    peers.clear()
+  }
 }
 
-function getLocalIP(): string {
+export function getLocalIP(): string {
   const nets = networkInterfaces()
   for (const name of Object.keys(nets)) {
     for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address
-      }
+      if (net.family === 'IPv4' && !net.internal) return net.address
     }
   }
   return '127.0.0.1'

@@ -5,3 +5,6 @@ out
 .env
 .env.local
 *.local
+*.tsbuildinfo
+.react-router
+build
