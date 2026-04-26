@@ -8,7 +8,6 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
-COPY apps/desktop/package.json ./apps/desktop/
 RUN pnpm install --frozen-lockfile
 
 # Build the web app
@@ -27,7 +26,6 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
-COPY apps/desktop/package.json ./apps/desktop/
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/apps/web/build ./apps/web/build
 COPY --from=builder /app/apps/web/server.js ./apps/web/server.js
