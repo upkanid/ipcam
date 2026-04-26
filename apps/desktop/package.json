@@ -36,6 +36,7 @@
   "build": {
     "appId": "com.upkanid.ipcam",
     "productName": "IPCam Upkan",
+    "icon": "resources/icon.png",
     "directories": {
       "output": "dist"
     },
@@ -46,6 +47,7 @@
       "target": "dmg"
     },
     "win": {
+      "icon": "resources/icon.ico",
       "target": "nsis"
     }
   }

@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createSignalingServer, getLocalIP } from './signaling'
@@ -6,6 +6,7 @@ import { createSignalingServer, getLocalIP } from './signaling'
 let stopSignaling: () => void
 
 function createWindow(): void {
+  const iconPath = join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
   const win = new BrowserWindow({
     width: 960,
     height: 640,
@@ -13,6 +14,7 @@ function createWindow(): void {
     minHeight: 520,
     show: false,
     autoHideMenuBar: true,
+    icon: nativeImage.createFromPath(iconPath),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
