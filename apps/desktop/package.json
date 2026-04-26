@@ -12,6 +12,7 @@
   "dependencies": {
     "electron-updater": "^6.1.7",
     "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
     "ws": "^8.20.0"
   },
   "devDependencies": {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import QRCode from 'qrcode'
+import { QRCodeSVG } from 'qrcode.react'
 
 const DEFAULT_PORT = 3717
 const DEFAULT_HOST = 'https://ipcam.upkan.id'
@@ -24,7 +24,6 @@ export default function App() {
   const [status, setStatus] = useState<Status>('idle')
   const [muted, setMuted] = useState(true)
   const [volume, setVolume] = useState(0.8)
-  const [qrDataUrl, setQrDataUrl] = useState('')
   const [showSettings, setShowSettings] = useState(false)
 
   // Settings state
@@ -43,17 +42,6 @@ export default function App() {
     videoRef.current.muted = muted
     videoRef.current.volume = volume
   }, [muted, volume])
-
-  // Generate QR whenever IP, port, or host changes
-  useEffect(() => {
-    if (localIP === '—') return
-    const shareUrl = `${hostUrl}/share?ip=${localIP}&port=${port}`
-    QRCode.toDataURL(shareUrl, {
-      width: 200,
-      margin: 1,
-      color: { dark: '#00e87a', light: '#0a0a0a' },
-    }).then(setQrDataUrl)
-  }, [localIP, port, hostUrl])
 
   function startReceiving() {
     const ws = new WebSocket(`ws://localhost:${port}`)
@@ -163,10 +151,16 @@ export default function App() {
             {/* QR / Idle overlay */}
             {status !== 'connected' && (
               <div style={s.monitorOverlay}>
-                {qrDataUrl ? (
+                {localIP !== '—' ? (
                   <>
                     <div style={s.qrWrap}>
-                      <img src={qrDataUrl} width={160} height={160} alt="QR" style={{ display: 'block' }} />
+                      <QRCodeSVG
+                        value={`${hostUrl}/share?ip=${localIP}&port=${port}`}
+                        size={160}
+                        bgColor="#0a0a0a"
+                        fgColor="#00e87a"
+                        level="M"
+                      />
                     </div>
                     <span style={s.qrLabel}>
                       {status === 'idle' ? 'SCAN DI HP UNTUK CONNECT' : 'WAITING FOR CONNECTION...'}
@@ -176,7 +170,7 @@ export default function App() {
                     </span>
                   </>
                 ) : (
-                  <span style={s.qrLabel}>MEMUAT...</span>
+                  <span style={s.qrLabel}>MEMUAT IP...</span>
                 )}
               </div>
             )}

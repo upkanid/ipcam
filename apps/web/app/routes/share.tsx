@@ -7,14 +7,12 @@ export function meta({}: Route.MetaArgs) {
 }
 
 type Status = "idle" | "connecting" | "streaming";
-
-type FacingMode = "environment" | "user" | "any";
 type Quality = "360" | "720" | "1080";
 
 interface MediaSettings {
   audio: boolean;
   video: boolean;
-  facing: FacingMode;
+  cameraId: string;   // deviceId, "environment", "user", or "" (any)
   quality: Quality;
 }
 
@@ -41,9 +39,33 @@ export default function Share() {
   const [media, setMedia]   = useState<MediaSettings>({
     audio: true,
     video: true,
-    facing: "environment",
+    cameraId: "environment",
     quality: "720",
   });
+  const [cameras, setCameras]         = useState<MediaDeviceInfo[]>([]);
+  const [cameraDetecting, setCameraDetecting] = useState(false);
+
+  async function detectCameras() {
+    setCameraDetecting(true);
+    try {
+      // Request permission so labels become available
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      s.getTracks().forEach((t) => t.stop());
+    } catch {
+      // Permission denied — enumerate anyway (labels may be empty)
+    }
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter((d) => d.kind === "videoinput");
+    setCameras(videoDevices);
+    // Auto-select the first rear camera if found
+    const rearCam = videoDevices.find((d) =>
+      d.label.toLowerCase().includes("back") ||
+      d.label.toLowerCase().includes("rear") ||
+      d.label.toLowerCase().includes("environment")
+    );
+    if (rearCam) setMedia((m) => ({ ...m, cameraId: rearCam.deviceId }));
+    setCameraDetecting(false);
+  }
 
   async function startSharing() {
     if (!ip.trim() || (!media.audio && !media.video)) return;
@@ -51,11 +73,16 @@ export default function Share() {
     setStatus("connecting");
 
     const { width, height } = QUALITY_MAP[media.quality];
+    const isFacingMode = media.cameraId === "environment" || media.cameraId === "user";
     const videoConstraints = media.video
       ? {
           width: { ideal: width },
           height: { ideal: height },
-          facingMode: media.facing === "any" ? undefined : media.facing,
+          ...(isFacingMode
+            ? { facingMode: media.cameraId }
+            : media.cameraId
+            ? { deviceId: { exact: media.cameraId } }
+            : {}),
         }
       : false;
 
@@ -187,7 +214,13 @@ export default function Share() {
 
         {/* Expandable settings */}
         {showSettings && status === "idle" && (
-          <MediaSettingsPanel media={media} setMedia={setMedia} />
+          <MediaSettingsPanel
+            media={media}
+            setMedia={setMedia}
+            cameras={cameras}
+            onDetect={detectCameras}
+            detecting={cameraDetecting}
+          />
         )}
 
         {/* IP input */}
@@ -238,7 +271,12 @@ export default function Share() {
             <span>·</span>
             <span style={{ color: "var(--accent)" }}>▶ {media.video ? `VIDEO ${media.quality}p` : "NO VIDEO"}</span>
             <span>·</span>
-            <span>{media.video && media.facing !== "any" ? (media.facing === "environment" ? "REAR CAM" : "FRONT CAM") : "ANY CAM"}</span>
+            <span>
+              {media.video
+                ? cameras.find((c) => c.deviceId === media.cameraId)?.label ||
+                  (media.cameraId === "environment" ? "REAR CAM" : media.cameraId === "user" ? "FRONT CAM" : "ANY CAM")
+                : "—"}
+            </span>
           </div>
         )}
       </div>
@@ -249,10 +287,13 @@ export default function Share() {
 /* ── Media Settings Panel ───────────────────────────────── */
 
 function MediaSettingsPanel({
-  media, setMedia,
+  media, setMedia, cameras, onDetect, detecting,
 }: {
   media: MediaSettings;
   setMedia: (m: MediaSettings) => void;
+  cameras: MediaDeviceInfo[];
+  onDetect: () => void;
+  detecting: boolean;
 }) {
   function update<K extends keyof MediaSettings>(key: K, val: MediaSettings[K]) {
     setMedia({ ...media, [key]: val });
@@ -280,23 +321,65 @@ function MediaSettingsPanel({
         />
       </div>
 
-      {/* Camera facing — only when video on */}
+      {/* Camera selection */}
       {media.video && (
-        <div style={sp.row}>
-          <span style={sp.label}>CAMERA</span>
-          <ToggleGroup<FacingMode>
-            options={[
-              { label: "REAR", value: "environment" },
-              { label: "FRONT", value: "user" },
-              { label: "ANY", value: "any" },
-            ]}
-            value={media.facing}
-            onChange={(v) => update("facing", v)}
-          />
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={sp.row}>
+            <span style={sp.label}>CAMERA</span>
+            <button
+              onClick={onDetect}
+              disabled={detecting}
+              style={{
+                fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.12em",
+                padding: "4px 10px", background: "transparent", cursor: detecting ? "wait" : "pointer",
+                color: "var(--accent)", border: "1px solid var(--accent)", transition: "opacity 0.2s",
+                opacity: detecting ? 0.5 : 1,
+              }}
+            >
+              {detecting ? "DETECTING..." : cameras.length > 0 ? "RE-DETECT" : "DETECT CAMERAS"}
+            </button>
+          </div>
+
+          {/* Detected camera list */}
+          {cameras.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {cameras.map((cam, i) => {
+                const label = cam.label || `Camera ${i + 1}`;
+                const isSelected = media.cameraId === cam.deviceId;
+                return (
+                  <button
+                    key={cam.deviceId}
+                    onClick={() => update("cameraId", cam.deviceId)}
+                    style={{
+                      fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em",
+                      padding: "8px 12px", textAlign: "left", cursor: "pointer",
+                      background: isSelected ? "var(--accent-dim)" : "transparent",
+                      color: isSelected ? "var(--accent)" : "var(--text-muted)",
+                      border: `1px solid ${isSelected ? "var(--accent)" : "var(--border-bright)"}`,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {isSelected ? "▶ " : "  "}{label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* Fallback: facingMode before detection */
+            <ToggleGroup<string>
+              options={[
+                { label: "REAR", value: "environment" },
+                { label: "FRONT", value: "user" },
+                { label: "ANY", value: "" },
+              ]}
+              value={media.cameraId}
+              onChange={(v) => update("cameraId", v)}
+            />
+          )}
         </div>
       )}
 
-      {/* Quality — only when video on */}
+      {/* Quality */}
       {media.video && (
         <div style={sp.row}>
           <span style={sp.label}>QUALITY</span>
