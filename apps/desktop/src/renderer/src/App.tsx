@@ -82,6 +82,7 @@ export default function App() {
   const [vcamStatus, setVcamStatus] = useState<VCamStatus>("idle");
   const [vcamInfo, setVcamInfo] = useState<VCamInfo | null>(null);
   const [error, setError] = useState("");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
 
   useEffect(() => {
     window.api?.getLocalIP().then(setLocalIP);
@@ -89,6 +90,7 @@ export default function App() {
     window.api?.virtualCam.onStatus((status, _reason) =>
       setVcamStatus(status as VCamStatus),
     );
+    window.api?.updater.onDownloaded(setUpdateVersion);
     return () => window.api?.virtualCam.offStatus();
   }, []);
 
@@ -257,6 +259,21 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* ── Update banner ───────────────────────────────── */}
+      {updateVersion && (
+        <div style={s.updateBanner}>
+          <span style={s.updateText}>
+            ↑ v{updateVersion} siap diinstall
+          </span>
+          <button
+            onClick={() => window.api.updater.install()}
+            style={s.updateBtn}
+          >
+            RESTART & UPDATE
+          </button>
+        </div>
+      )}
 
       {/* ── Main ─────────────────────────────────────────── */}
       <main style={s.main}>
@@ -1307,6 +1324,33 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9,
     color: "var(--text-muted)",
     letterSpacing: "0.1em",
+  },
+
+  updateBanner: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 20px",
+    background: "rgba(0,232,122,0.08)",
+    borderBottom: "1px solid rgba(0,232,122,0.25)",
+    flexShrink: 0,
+  },
+  updateText: {
+    fontFamily: "var(--mono)",
+    fontSize: 11,
+    color: "var(--accent)",
+    letterSpacing: "0.1em",
+  },
+  updateBtn: {
+    fontFamily: "var(--mono)",
+    fontSize: 10,
+    letterSpacing: "0.14em",
+    background: "var(--accent)",
+    color: "#000",
+    border: "none",
+    padding: "5px 14px",
+    cursor: "pointer",
+    fontWeight: 700,
   },
 
   errorBanner: {

@@ -46,6 +46,11 @@
     "directories": {
       "output": "dist"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "upkanid",
+      "repo": "ipcam"
+    },
     "linux": {
       "target": "AppImage"
     },

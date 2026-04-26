@@ -16,4 +16,9 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('virtualcam:status', (_, status, reason) => cb(status, reason)),
     offStatus: () => ipcRenderer.removeAllListeners('virtualcam:status'),
   },
+  updater: {
+    onDownloaded: (cb: (version: string) => void) =>
+      ipcRenderer.on('updater:downloaded', (_, version) => cb(version)),
+    install: () => ipcRenderer.send('updater:install'),
+  },
 })

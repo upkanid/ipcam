@@ -1,13 +1,14 @@
 import { app, shell, BrowserWindow, ipcMain, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { autoUpdater } from 'electron-updater'
 import { createSignalingServer, getLocalIP } from './signaling'
 import { VirtualCamera, getPlatformInfo } from './virtualcam'
 
 let stopSignaling: () => void
 let virtualCam: VirtualCamera
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const iconPath = join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
   const win = new BrowserWindow({
     width: 960,
@@ -35,6 +36,24 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return win
+}
+
+function setupAutoUpdater(win: BrowserWindow): void {
+  if (is.dev) return
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-downloaded', (info) => {
+    win.webContents.send('updater:downloaded', info.version)
+  })
+
+  // Check after 5 s so the app finishes loading first
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
+
+  ipcMain.on('updater:install', () => autoUpdater.quitAndInstall())
 }
 
 app.whenReady().then(() => {
@@ -70,7 +89,8 @@ app.whenReady().then(() => {
 
   virtualCam = new VirtualCamera()
   stopSignaling = createSignalingServer(3717)
-  createWindow()
+  const win = createWindow()
+  setupAutoUpdater(win)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
