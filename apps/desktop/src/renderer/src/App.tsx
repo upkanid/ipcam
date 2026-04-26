@@ -81,6 +81,7 @@ export default function App() {
   // Virtual camera state
   const [vcamStatus, setVcamStatus] = useState<VCamStatus>("idle");
   const [vcamInfo, setVcamInfo] = useState<VCamInfo | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     window.api?.getLocalIP().then(setLocalIP);
@@ -148,6 +149,7 @@ export default function App() {
   }
 
   function startReceiving() {
+    setError("");
     const ws = new WebSocket(getSignalingUrl(hostUrl, roomId, port));
     wsRef.current = ws;
     setStatus("waiting");
@@ -182,7 +184,26 @@ export default function App() {
       }
     };
 
-    ws.onerror = () => setStatus("idle");
+    ws.onerror = () => {
+      setError(
+        `Tidak bisa terhubung ke signaling server. Periksa host URL dan port.`,
+      );
+      setStatus("idle");
+    };
+
+    ws.onclose = (ev) => {
+      if (!ev.wasClean) {
+        setError("Koneksi ke signaling server terputus.");
+        setStatus("idle");
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "failed") {
+        setError("Koneksi WebRTC gagal. Coba start receiving lagi.");
+        setStatus("idle");
+      }
+    };
   }
 
   function stop() {
@@ -191,6 +212,7 @@ export default function App() {
     wsRef.current?.close();
     if (videoRef.current) videoRef.current.srcObject = null;
     setStatus("idle");
+    setError("");
     setRoomId(generateRoomId());
   }
 
@@ -465,6 +487,11 @@ export default function App() {
               <div style={s.section}>
                 <p style={s.sectionLabel}>// STATUS</p>
                 <StatusDetail status={status} />
+                {error && (
+                  <div style={s.errorBanner}>
+                    <span style={s.errorText}>⚠ {error}</span>
+                  </div>
+                )}
               </div>
 
               <div style={s.panelDivider} />
@@ -1280,6 +1307,19 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9,
     color: "var(--text-muted)",
     letterSpacing: "0.1em",
+  },
+
+  errorBanner: {
+    padding: "8px 10px",
+    background: "rgba(255,60,60,0.08)",
+    border: "1px solid rgba(255,60,60,0.25)",
+  },
+  errorText: {
+    fontFamily: "var(--mono)",
+    fontSize: 9,
+    color: "var(--danger)",
+    letterSpacing: "0.06em",
+    lineHeight: 1.6,
   },
 
   settingRow: { display: "flex", flexDirection: "column", gap: 8 },

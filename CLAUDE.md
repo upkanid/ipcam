@@ -35,22 +35,39 @@ apps/web/       — React Router v7, SSR mode, deployed via Docker to Coolify  (
 apps/desktop/   — Electron + React + electron-vite                            (renderer dev port 5174)
 ```
 
-### Core flow
+### Two signaling modes
+
+There are two modes that determine how the phone and desktop connect:
+
+| Mode | When | Signaling path |
+|---|---|---|
+| **Cloud** (default) | `hostUrl` is HTTPS (e.g. `https://ipcam.upkan.id`) | Room-based relay: both peers connect to `wss://<host>/ws?room=<roomId>` on the web server |
+| **LAN / dev** | `hostUrl` is HTTP or localhost | Direct: phone → `ws://<desktop-ip>:3717`, desktop renderer → `ws://localhost:3717` |
+
+In **cloud mode**: desktop generates a random `roomId`, encodes it into the QR URL (`/share?room=<roomId>`), and connects to the cloud relay in the same room. The web server (`server.ts`) proxies the WebSocket and routes messages per room.
+
+In **LAN mode**: desktop shows its local IP in the QR URL (`/share?ip=<ip>&port=3717`). The phone connects directly to the desktop's signaling server. No rooms are used.
+
+The `/share` page opened **directly** on HTTPS without `?room=` shows a "scan QR from desktop" notice — IP-based WS is blocked by mixed-content policy on HTTPS anyway.
+
+### Core flow (cloud mode)
 
 ```
-Phone browser (apps/web /share)
+Phone browser (/share?room=XXXX)
   └─ getUserMedia → WebRTC offer
-       └─ WebSocket to ws://<desktop-ip>:3717  ← signaling server in Electron main
-            └─ WebRTC peer-to-peer stream
-                 └─ Electron renderer previews stream
-                      └─ (future) virtual camera output
+       └─ wss://ipcam.upkan.id/ws?room=XXXX  ← relay in web server (server.ts)
+            └─ wss://ipcam.upkan.id/ws?room=XXXX  ← desktop renderer connects here too
+                 └─ WebRTC peer-to-peer stream
+                      └─ Electron renderer previews stream
+                           └─ virtual camera output
 ```
 
 ### apps/web
 
-Two routes:
+Three routes:
 - `/` (`routes/landing.tsx`) — marketing landing page
-- `/share` (`routes/share.tsx`) — phone UI: requests camera permission, connects to Electron signaling server via WebSocket, initiates WebRTC offer
+- `/share` (`routes/share.tsx`) — phone UI: camera permission, WebRTC offer sender
+- WebSocket at `/ws?room=<id>` — signaling relay (handled in `server.ts`, not a route)
 
 The `/share` page is entirely client-side (no loaders/actions). It manages the WebRTC peer connection lifecycle in React refs to avoid re-render teardown.
 
@@ -60,17 +77,17 @@ Three Electron processes, standard `electron-vite` layout:
 
 | Process | File | Responsibility |
 |---|---|---|
-| Main | `src/main/index.ts` | App lifecycle, IPC handlers, starts signaling server |
-| Preload | `src/preload/index.ts` | Context bridge — exposes `window.api.getLocalIP()` |
-| Renderer | `src/renderer/src/App.tsx` | React UI: show IP, manage WebRTC receiver, preview video |
+| Main | `src/main/index.ts` | App lifecycle, IPC handlers, starts LAN signaling server |
+| Preload | `src/preload/index.ts` | Context bridge — exposes `window.api` |
+| Renderer | `src/renderer/src/App.tsx` | React UI: QR code, WebRTC receiver, video preview, virtual cam controls |
 
-**Signaling server** (`src/main/signaling.ts`): plain WebSocket server on port `3717`, binds to `0.0.0.0`. It is a dumb relay — it forwards every message from one peer to all others. No rooms, no auth.
+**LAN signaling server** (`src/main/signaling.ts`): plain WebSocket server on port `3717`, binds to `0.0.0.0`. Dumb broadcast relay — forwards every message from one peer to all others. Used only in LAN mode; cloud mode uses the web server relay instead.
 
-**IPC**: `get-local-ip` handler in main returns the first non-internal IPv4 address. The renderer calls it via `window.api.getLocalIP()` on mount to display the address the phone should connect to.
+**IPC**: `get-local-ip` handler in main returns the first non-internal IPv4 address. Renderer calls it via `window.api.getLocalIP()` to show in the LAN-mode panel and encode into the QR URL.
 
-### Virtual camera (not yet implemented)
+### Virtual camera
 
-The Electron app receives the WebRTC stream in the renderer. To output it as a virtual camera device, a native bridge is needed (e.g. `v4l2loopback` on Linux, OBS Virtual Camera on Windows/Mac). Users must install the driver themselves — the app should detect presence and show instructions if missing.
+The Electron app receives the WebRTC stream in the renderer. A canvas-based frame capture loop (`rafRef`) reads video frames at 15 fps and sends raw RGBA buffers to the main process via `window.api.virtualCam.sendFrame()`. The main process writes them to the virtual camera device. Users must install the driver themselves (e.g. OBS Virtual Camera on macOS).
 
 ### Signaling port
 

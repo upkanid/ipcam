@@ -29,6 +29,13 @@ export default function Share() {
     .filter(Boolean)
     .join(":");
 
+  // Cloud deploy: HTTPS without a room param means the page was opened directly,
+  // not via QR. IP-based WS would be blocked by mixed-content policy anyway.
+  const noRoomOnHttps =
+    !room &&
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:";
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -157,6 +164,22 @@ export default function Share() {
       setStatus("idle");
       stream.getTracks().forEach((t) => t.stop());
     };
+
+    ws.onclose = (ev) => {
+      if (!ev.wasClean) {
+        setError("Koneksi terputus. Coba hubungkan lagi.");
+        setStatus("idle");
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "failed") {
+        setError("Koneksi WebRTC gagal. Coba hubungkan lagi.");
+        setStatus("idle");
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    };
   }
 
   function stopSharing() {
@@ -279,11 +302,22 @@ export default function Share() {
           />
         )}
 
-        {/* IP input — only shown in LAN/dev mode (no ?room= param) */}
+        {/* Connection target */}
         {room ? (
           <div style={s.roomBadge}>
             <span style={s.roomLabel}>ROOM</span>
             <span style={s.roomCode}>{room}</span>
+          </div>
+        ) : noRoomOnHttps ? (
+          <div style={s.noRoomNotice}>
+            <span style={s.noRoomIcon}>⬡</span>
+            <div>
+              <p style={s.noRoomTitle}>SCAN QR DI DESKTOP APP</p>
+              <p style={s.noRoomHint}>
+                Buka IPCAM Upkan di desktop, lalu scan QR code yang tampil.
+                Halaman ini tidak bisa dibuka langsung.
+              </p>
+            </div>
           </div>
         ) : (
           <div style={{ position: "relative" }}>
@@ -320,27 +354,29 @@ export default function Share() {
 
         {/* Action button */}
         {status === "idle" ? (
-          <button
-            onClick={startSharing}
-            disabled={(!room && !ip.trim()) || (!media.audio && !media.video)}
-            style={{
-              ...s.actionBtn,
-              background:
-                (room || ip.trim()) && (media.audio || media.video)
-                  ? "var(--accent)"
-                  : "var(--surface)",
-              color:
-                (room || ip.trim()) && (media.audio || media.video)
-                  ? "#000"
-                  : "var(--text-muted)",
-              cursor:
-                (room || ip.trim()) && (media.audio || media.video)
-                  ? "pointer"
-                  : "not-allowed",
-            }}
-          >
-            → Start Sharing
-          </button>
+          !noRoomOnHttps && (
+            <button
+              onClick={startSharing}
+              disabled={(!room && !ip.trim()) || (!media.audio && !media.video)}
+              style={{
+                ...s.actionBtn,
+                background:
+                  (room || ip.trim()) && (media.audio || media.video)
+                    ? "var(--accent)"
+                    : "var(--surface)",
+                color:
+                  (room || ip.trim()) && (media.audio || media.video)
+                    ? "#000"
+                    : "var(--text-muted)",
+                cursor:
+                  (room || ip.trim()) && (media.audio || media.video)
+                    ? "pointer"
+                    : "not-allowed",
+              }}
+            >
+              → Start Sharing
+            </button>
+          )
         ) : (
           <button onClick={stopSharing} style={s.stopBtn}>
             ■ Stop
@@ -776,6 +812,35 @@ const s: Record<string, React.CSSProperties> = {
     padding: "10px 14px",
     background: "rgba(255,60,60,0.08)",
     border: "1px solid rgba(255,60,60,0.2)",
+  },
+  noRoomNotice: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 14,
+    padding: "16px 14px",
+    background: "var(--surface)",
+    border: "1px solid var(--border-bright)",
+  },
+  noRoomIcon: {
+    fontFamily: "var(--mono)",
+    fontSize: 20,
+    color: "var(--text-muted)",
+    flexShrink: 0,
+    lineHeight: 1.2,
+  },
+  noRoomTitle: {
+    fontFamily: "var(--mono)",
+    fontSize: 11,
+    color: "var(--accent)",
+    letterSpacing: "0.14em",
+    marginBottom: 6,
+  },
+  noRoomHint: {
+    fontFamily: "var(--mono)",
+    fontSize: 10,
+    color: "var(--text-muted)",
+    letterSpacing: "0.04em",
+    lineHeight: 1.7,
   },
   actionBtn: {
     width: "100%",
