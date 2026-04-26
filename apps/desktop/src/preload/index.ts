@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electron', electronAPI)
 
 contextBridge.exposeInMainWorld('api', {
   getLocalIP: () => ipcRenderer.invoke('get-local-ip'),
+  getVersion: () => ipcRenderer.invoke('get-version'),
   restartSignaling: (port: number) => ipcRenderer.invoke('restart-signaling', port),
   virtualCam: {
     check: () => ipcRenderer.invoke('virtualcam:check'),
@@ -19,6 +20,9 @@ contextBridge.exposeInMainWorld('api', {
   updater: {
     onDownloaded: (cb: (version: string) => void) =>
       ipcRenderer.on('updater:downloaded', (_, version) => cb(version)),
+    onAvailable: (cb: (version: string) => void) =>
+      ipcRenderer.on('updater:available', (_, version) => cb(version)),
     install: () => ipcRenderer.send('updater:install'),
+    openReleases: () => ipcRenderer.send('updater:open-releases'),
   },
 })

@@ -65,12 +65,18 @@ export default function App() {
   const lastFrameRef = useRef(0);
   const vcamArmedRef = useRef(false);
 
+  const prevStatusRef = useRef<Status>("idle");
+
   const [localIP, setLocalIP] = useState("—");
   const [status, setStatus] = useState<Status>("idle");
+  const [fps, setFps] = useState<number | null>(null);
+  const [resolution, setResolution] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [muted, setMuted] = useState(true);
   const [volume, setVolume] = useState(0.8);
   const [showSettings, setShowSettings] = useState(false);
   const [roomId, setRoomId] = useState(generateRoomId);
+  const [roomCopied, setRoomCopied] = useState(false);
 
   // Settings state
   const [port, setPort] = useState(DEFAULT_PORT);
@@ -83,16 +89,56 @@ export default function App() {
   const [vcamInfo, setVcamInfo] = useState<VCamInfo | null>(null);
   const [error, setError] = useState("");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
 
   useEffect(() => {
     window.api?.getLocalIP().then(setLocalIP);
+    window.api?.getVersion().then(setAppVersion);
     window.api?.virtualCam.check().then(setVcamInfo);
     window.api?.virtualCam.onStatus((status, _reason) =>
       setVcamStatus(status as VCamStatus),
     );
     window.api?.updater.onDownloaded(setUpdateVersion);
+    window.api?.updater.onAvailable(setUpdateAvailable);
     return () => window.api?.virtualCam.offStatus();
   }, []);
+
+  // FPS polling via WebRTC inbound-rtp stats
+  useEffect(() => {
+    if (status !== "connected" || !pcRef.current) {
+      setFps(null);
+      return;
+    }
+    const interval = setInterval(async () => {
+      if (!pcRef.current) return;
+      const stats = await pcRef.current.getStats();
+      stats.forEach((report) => {
+        if (report.type === "inbound-rtp") {
+          const r = report as RTCInboundRtpStreamStats;
+          if (r.kind === "video" && typeof r.framesPerSecond === "number") {
+            setFps(Math.round(r.framesPerSecond));
+          }
+        }
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [status]);
+
+  // System notifications on connect / disconnect
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (prev === status) return;
+    if (prev !== "connected" && status === "connected") {
+      new Notification("IPCAM UPKAN", { body: "Kamera terhubung" });
+    } else if (prev === "connected" && status !== "connected") {
+      new Notification("IPCAM UPKAN", { body: "Koneksi terputus" });
+    }
+  }, [status]);
+
+  // Auto-connect on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { startReceiving(); }, []);
 
   // Sync audio to video element (React muted prop doesn't update reactively)
   useEffect(() => {
@@ -141,6 +187,17 @@ export default function App() {
       cancelAnimationFrame(rafRef.current);
     };
   }, [vcamStatus, status]);
+
+  function copyRoom() {
+    navigator.clipboard.writeText(roomId);
+    setRoomCopied(true);
+    setTimeout(() => setRoomCopied(false), 1500);
+  }
+
+  function regenerateRoom() {
+    if (status !== "idle") stop();
+    else setRoomId(generateRoomId());
+  }
 
   function toggleVirtualCam() {
     if (vcamStatus === "idle") {
@@ -215,6 +272,8 @@ export default function App() {
     if (videoRef.current) videoRef.current.srcObject = null;
     setStatus("idle");
     setError("");
+    setFps(null);
+    setResolution(null);
     setRoomId(generateRoomId());
   }
 
@@ -261,17 +320,26 @@ export default function App() {
       </header>
 
       {/* ── Update banner ───────────────────────────────── */}
-      {updateVersion && (
+      {(updateVersion || updateAvailable) && (
         <div style={s.updateBanner}>
           <span style={s.updateText}>
-            ↑ v{updateVersion} siap diinstall
+            ↑ v{updateVersion ?? updateAvailable} tersedia
           </span>
-          <button
-            onClick={() => window.api.updater.install()}
-            style={s.updateBtn}
-          >
-            RESTART & UPDATE
-          </button>
+          {updateVersion ? (
+            <button
+              onClick={() => window.api.updater.install()}
+              style={s.updateBtn}
+            >
+              RESTART & UPDATE
+            </button>
+          ) : (
+            <button
+              onClick={() => window.api.updater.openReleases()}
+              style={s.updateBtn}
+            >
+              LIHAT RELEASES →
+            </button>
+          )}
         </div>
       )}
 
@@ -292,6 +360,11 @@ export default function App() {
               autoPlay
               playsInline
               style={{ ...s.video, opacity: status === "connected" ? 1 : 0 }}
+              onLoadedMetadata={() => {
+                if (videoRef.current) {
+                  setResolution(`${videoRef.current.videoWidth}×${videoRef.current.videoHeight}`);
+                }
+              }}
             />
 
             {/* QR / Idle overlay */}
@@ -351,6 +424,8 @@ export default function App() {
               ["SRC", "PHONE / WebRTC"],
               ["CODEC", "H.264 / VP9"],
               ["PORT", String(port)],
+              ["FPS", fps !== null ? String(fps) : "—"],
+              ["RES", resolution ?? "—"],
             ].map(([label, value], i) => (
               <span
                 key={label}
@@ -389,28 +464,66 @@ export default function App() {
                 <p style={s.sectionLabel}>// SIGNAL SOURCE</p>
                 {isCloudMode(hostUrl) ? (
                   <>
-                    <div style={{ ...s.ipBlock, gap: 10 }}>
-                      <span
-                        style={{
-                          fontFamily: "var(--mono)",
-                          fontSize: 9,
-                          color: "var(--text-muted)",
-                          letterSpacing: "0.14em",
-                        }}
-                      >
-                        ROOM
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: "var(--display)",
-                          fontSize: 24,
-                          fontWeight: 800,
-                          color: "var(--accent)",
-                          letterSpacing: "0.12em",
-                        }}
-                      >
-                        {roomId}
-                      </span>
+                    <div style={{ ...s.ipBlock, flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                        <span
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 9,
+                            color: "var(--text-muted)",
+                            letterSpacing: "0.14em",
+                          }}
+                        >
+                          ROOM
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "var(--display)",
+                            fontSize: 24,
+                            fontWeight: 800,
+                            color: "var(--accent)",
+                            letterSpacing: "0.12em",
+                          }}
+                        >
+                          {roomId}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, width: "100%" }}>
+                        <button
+                          onClick={copyRoom}
+                          style={{
+                            flex: 1,
+                            fontFamily: "var(--mono)",
+                            fontSize: 9,
+                            letterSpacing: "0.12em",
+                            background: "transparent",
+                            border: `1px solid ${roomCopied ? "var(--accent)" : "var(--border-bright)"}`,
+                            color: roomCopied ? "var(--accent)" : "var(--text-muted)",
+                            padding: "4px 6px",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {roomCopied ? "✓ COPIED" : "⧉ COPY"}
+                        </button>
+                        <button
+                          onClick={regenerateRoom}
+                          style={{
+                            flex: 1,
+                            fontFamily: "var(--mono)",
+                            fontSize: 9,
+                            letterSpacing: "0.12em",
+                            background: "transparent",
+                            border: "1px solid var(--border-bright)",
+                            color: "var(--text-muted)",
+                            padding: "4px 6px",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          ↺ NEW ROOM
+                        </button>
+                      </div>
                     </div>
                     <p style={s.ipHint}>
                       Scan QR — relay via{" "}
@@ -490,12 +603,6 @@ export default function App() {
                     </span>
                   </div>
                 )}
-                {muted && (
-                  <p style={s.ipHint}>
-                    Muted by default — cegah feedback saat dev di mesin yang
-                    sama.
-                  </p>
-                )}
               </div>
 
               <div style={s.panelDivider} />
@@ -521,6 +628,7 @@ export default function App() {
                   vcamStatus={vcamStatus}
                   vcamInfo={vcamInfo}
                   onToggle={toggleVirtualCam}
+                  onRecheck={() => window.api?.virtualCam.check().then(setVcamInfo)}
                 />
               </div>
 
@@ -546,6 +654,12 @@ export default function App() {
                     <span>LAN ONLY</span>
                     <span>·</span>
                     <span>0.0.0.0</span>
+                  </>
+                )}
+                {appVersion && (
+                  <>
+                    <span style={{ flex: 1 }} />
+                    <span>v{appVersion}</span>
                   </>
                 )}
               </div>
@@ -876,11 +990,13 @@ function VirtualCamSection({
   vcamStatus,
   vcamInfo,
   onToggle,
+  onRecheck,
 }: {
   streamStatus: Status;
   vcamStatus: VCamStatus;
   vcamInfo: VCamInfo | null;
   onToggle: () => void;
+  onRecheck: () => void;
 }) {
   if (!vcamInfo) {
     return (
@@ -899,7 +1015,7 @@ function VirtualCamSection({
 
   if (!vcamInfo.supported) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span
           style={{
             fontFamily: "var(--mono)",
@@ -922,6 +1038,40 @@ function VirtualCamSection({
         >
           {vcamInfo.reason}
         </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => window.open("https://obsproject.com/wiki/install-instructions/mac")}
+            style={{
+              flex: 1,
+              fontFamily: "var(--mono)",
+              fontSize: 9,
+              letterSpacing: "0.12em",
+              background: "transparent",
+              border: "1px solid var(--warning)",
+              color: "var(--warning)",
+              padding: "5px 8px",
+              cursor: "pointer",
+            }}
+          >
+            ↗ DOWNLOAD OBS
+          </button>
+          <button
+            onClick={onRecheck}
+            style={{
+              flex: 1,
+              fontFamily: "var(--mono)",
+              fontSize: 9,
+              letterSpacing: "0.12em",
+              background: "transparent",
+              border: "1px solid var(--border-bright)",
+              color: "var(--text-muted)",
+              padding: "5px 8px",
+              cursor: "pointer",
+            }}
+          >
+            ↺ CEK ULANG
+          </button>
+        </div>
       </div>
     );
   }

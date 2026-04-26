@@ -40,20 +40,31 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+const RELEASES_URL = 'https://github.com/upkanid/ipcam/releases/latest'
+
 function setupAutoUpdater(win: BrowserWindow): void {
   if (is.dev) return
 
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  const isMac = process.platform === 'darwin'
 
-  autoUpdater.on('update-downloaded', (info) => {
-    win.webContents.send('updater:downloaded', info.version)
-  })
+  // macOS: can't silently install without notarization — just detect and redirect
+  autoUpdater.autoDownload = !isMac
+  autoUpdater.autoInstallOnAppQuit = !isMac
 
-  // Check after 5 s so the app finishes loading first
+  if (isMac) {
+    autoUpdater.on('update-available', (info) => {
+      win.webContents.send('updater:available', info.version)
+    })
+  } else {
+    autoUpdater.on('update-downloaded', (info) => {
+      win.webContents.send('updater:downloaded', info.version)
+    })
+  }
+
   setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
 
   ipcMain.on('updater:install', () => autoUpdater.quitAndInstall())
+  ipcMain.on('updater:open-releases', () => shell.openExternal(RELEASES_URL))
 }
 
 app.whenReady().then(() => {
@@ -64,6 +75,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('get-local-ip', () => getLocalIP())
+  ipcMain.handle('get-version', () => app.getVersion())
 
   ipcMain.handle('restart-signaling', (_, port: number) => {
     if (stopSignaling) stopSignaling()
