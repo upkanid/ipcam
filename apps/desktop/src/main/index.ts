@@ -2,8 +2,10 @@ import { app, shell, BrowserWindow, ipcMain, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createSignalingServer, getLocalIP } from './signaling'
+import { VirtualCamera, getPlatformInfo } from './virtualcam'
 
 let stopSignaling: () => void
+let virtualCam: VirtualCamera
 
 function createWindow(): void {
   const iconPath = join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
@@ -50,6 +52,23 @@ app.whenReady().then(() => {
     return port
   })
 
+  ipcMain.handle('virtualcam:check', () => getPlatformInfo())
+
+  ipcMain.on('virtualcam:arm', (event) => {
+    virtualCam.arm((status) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('virtualcam:status', status, virtualCam.getInfo().reason)
+      }
+    })
+  })
+
+  ipcMain.on('virtualcam:disarm', () => virtualCam.disarm())
+
+  ipcMain.on('virtualcam:frame', (_, buffer: ArrayBuffer, width: number, height: number) => {
+    virtualCam.writeFrame(Buffer.from(buffer), width, height)
+  })
+
+  virtualCam = new VirtualCamera()
   stopSignaling = createSignalingServer(3717)
   createWindow()
 
@@ -59,5 +78,6 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  virtualCam?.destroy()
   if (process.platform !== 'darwin') app.quit()
 })

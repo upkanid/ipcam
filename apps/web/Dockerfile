@@ -28,6 +28,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/apps/web/build ./apps/web/build
+COPY --from=builder /app/apps/web/server.js ./apps/web/server.js
 WORKDIR /app/apps/web
 EXPOSE 3000
-CMD ["node_modules/.bin/react-router-serve", "./build/server/index.js"]
+CMD ["node", "server.js"]

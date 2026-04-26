@@ -24,6 +24,7 @@ const QUALITY_MAP: Record<Quality, { width: number; height: number }> = {
 
 export default function Share() {
   const [params] = useSearchParams();
+  const room = params.get("room");
   const defaultIp = [params.get("ip"), params.get("port")]
     .filter(Boolean)
     .join(":");
@@ -68,8 +69,18 @@ export default function Share() {
     setCameraDetecting(false);
   }
 
+  function buildWsUrl(): string {
+    if (room) {
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      return `${proto}://${location.host}/ws?room=${room}`;
+    }
+    const target = ip.trim().includes(":") ? ip.trim() : `${ip.trim()}:3717`;
+    return `ws://${target}`;
+  }
+
   async function startSharing() {
-    if (!ip.trim() || (!media.audio && !media.video)) return;
+    if (!room && !ip.trim()) return;
+    if (!media.audio && !media.video) return;
     setError("");
     setStatus("connecting");
 
@@ -102,8 +113,7 @@ export default function Share() {
 
     if (videoRef.current) videoRef.current.srcObject = stream;
 
-    const target = ip.trim().includes(":") ? ip.trim() : `${ip.trim()}:3717`;
-    const ws = new WebSocket(`ws://${target}`);
+    const ws = new WebSocket(buildWsUrl());
     wsRef.current = ws;
 
     const pc = new RTCPeerConnection({
@@ -136,6 +146,11 @@ export default function Share() {
     };
 
     ws.onerror = () => {
+      const target = room
+        ? `room ${room}`
+        : ip.trim().includes(":")
+          ? ip.trim()
+          : `${ip.trim()}:3717`;
       setError(
         `Tidak bisa terhubung ke ${target}. Pastikan Electron app sedang berjalan.`,
       );
@@ -264,35 +279,42 @@ export default function Share() {
           />
         )}
 
-        {/* IP input */}
-        <div style={{ position: "relative" }}>
-          <span style={s.wsPrefix}>ws://</span>
-          <input
-            type="text"
-            inputMode="url"
-            placeholder="192.168.x.x:3717"
-            value={ip}
-            onChange={(e) => setIp(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === "Enter" && status === "idle" && startSharing()
-            }
-            disabled={isActive}
-            style={{
-              ...s.ipInput,
-              color: isActive ? "var(--text-muted)" : "var(--text)",
-              borderColor: isStreaming
-                ? "var(--accent)"
-                : "var(--border-bright)",
-            }}
-            onFocus={(e) => {
-              if (!isActive) e.target.style.borderColor = "var(--accent)";
-            }}
-            onBlur={(e) => {
-              if (!isActive)
-                e.target.style.borderColor = "var(--border-bright)";
-            }}
-          />
-        </div>
+        {/* IP input — only shown in LAN/dev mode (no ?room= param) */}
+        {room ? (
+          <div style={s.roomBadge}>
+            <span style={s.roomLabel}>ROOM</span>
+            <span style={s.roomCode}>{room}</span>
+          </div>
+        ) : (
+          <div style={{ position: "relative" }}>
+            <span style={s.wsPrefix}>ws://</span>
+            <input
+              type="text"
+              inputMode="url"
+              placeholder="192.168.x.x:3717"
+              value={ip}
+              onChange={(e) => setIp(e.target.value)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && status === "idle" && startSharing()
+              }
+              disabled={isActive}
+              style={{
+                ...s.ipInput,
+                color: isActive ? "var(--text-muted)" : "var(--text)",
+                borderColor: isStreaming
+                  ? "var(--accent)"
+                  : "var(--border-bright)",
+              }}
+              onFocus={(e) => {
+                if (!isActive) e.target.style.borderColor = "var(--accent)";
+              }}
+              onBlur={(e) => {
+                if (!isActive)
+                  e.target.style.borderColor = "var(--border-bright)";
+              }}
+            />
+          </div>
+        )}
 
         {error && <p style={s.error}>{error}</p>}
 
@@ -300,19 +322,19 @@ export default function Share() {
         {status === "idle" ? (
           <button
             onClick={startSharing}
-            disabled={!ip.trim() || (!media.audio && !media.video)}
+            disabled={(!room && !ip.trim()) || (!media.audio && !media.video)}
             style={{
               ...s.actionBtn,
               background:
-                ip.trim() && (media.audio || media.video)
+                (room || ip.trim()) && (media.audio || media.video)
                   ? "var(--accent)"
                   : "var(--surface)",
               color:
-                ip.trim() && (media.audio || media.video)
+                (room || ip.trim()) && (media.audio || media.video)
                   ? "#000"
                   : "var(--text-muted)",
               cursor:
-                ip.trim() && (media.audio || media.video)
+                (room || ip.trim()) && (media.audio || media.video)
                   ? "pointer"
                   : "not-allowed",
             }}
@@ -712,6 +734,27 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--text-muted)",
     pointerEvents: "none",
     letterSpacing: "0.05em",
+  },
+  roomBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "14px",
+    background: "var(--surface)",
+    border: "1px solid var(--accent)",
+  },
+  roomLabel: {
+    fontFamily: "var(--mono)",
+    fontSize: 9,
+    color: "var(--text-muted)",
+    letterSpacing: "0.18em",
+  },
+  roomCode: {
+    fontFamily: "var(--mono)",
+    fontSize: 20,
+    color: "var(--accent)",
+    letterSpacing: "0.2em",
+    fontWeight: 700,
   },
   ipInput: {
     width: "100%",
