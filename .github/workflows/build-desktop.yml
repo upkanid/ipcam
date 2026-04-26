@@ -43,9 +43,8 @@ jobs:
         run: pnpm --filter desktop build
 
       - name: Package (electron-builder)
-        run: pnpm --filter desktop dist
+        run: pnpm --filter desktop dist --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           SKIP_NOTARIZE: true
 
