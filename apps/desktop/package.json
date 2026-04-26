@@ -2,6 +2,12 @@
   "name": "desktop",
   "private": true,
   "version": "1.0.0",
+  "description": "Turn your phone into a wireless IP camera via WebRTC",
+  "author": "Upkan ID",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/upkanid/ipcam.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
