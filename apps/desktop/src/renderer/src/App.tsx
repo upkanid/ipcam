@@ -525,7 +525,7 @@ const s: Record<string, React.CSSProperties> = {
   video: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', transition: 'opacity 0.4s' },
   monitorGrid: {
     position: 'absolute', inset: 0,
-    backgroundImage: 'linear-gradient(rgba(0,232,122,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(0,232,122,0.018) 1px, transparent 1px)',
+    backgroundImage: 'linear-gradient(rgba(0,232,122,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,232,122,0.03) 1px, transparent 1px)',
     backgroundSize: '40px 40px', pointerEvents: 'none', zIndex: 1,
   },
   scanline: {

@@ -17,7 +17,7 @@ export default function Landing() {
           position: "fixed",
           inset: 0,
           backgroundImage:
-            "linear-gradient(rgba(0,232,122,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,232,122,0.025) 1px, transparent 1px)",
+            "linear-gradient(rgba(0,232,122,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,232,122,0.04) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
           pointerEvents: "none",
           animation: "grid-fade 1.2s ease both",

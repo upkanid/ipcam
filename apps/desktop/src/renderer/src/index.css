@@ -1,17 +1,17 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:            #090909;
-  --bg2:           #0d0d0d;
-  --surface:       #111111;
-  --surface2:      #161616;
-  --border:        #1a1a1a;
-  --border-bright: #272727;
+  --bg:            #0d0d0d;
+  --bg2:           #121212;
+  --surface:       #191919;
+  --surface2:      #202020;
+  --border:        #282828;
+  --border-bright: #3a3a3a;
   --accent:        #00e87a;
-  --accent-dim:    rgba(0, 232, 122, 0.10);
+  --accent-dim:    rgba(0, 232, 122, 0.12);
   --accent-glow:   rgba(0, 232, 122, 0.38);
-  --text:          #ececec;
-  --text-muted:    #4a4a4a;
+  --text:          #f0f0f0;
+  --text-muted:    #8a8a8a;
   --danger:        #ff3838;
   --warning:       #f5a623;
   --mono:          'Share Tech Mono', 'Courier New', monospace;
