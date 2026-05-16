@@ -151,34 +151,67 @@ export default function Landing() {
             <span style={{ color: "var(--text)", fontFamily: "var(--mono)", fontSize: 13 }}>Pure WebRTC.</span>
           </p>
 
-          <a
-            href="/share"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 10,
-              background: "var(--accent)",
-              color: "#000",
-              fontFamily: "var(--mono)",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              textDecoration: "none",
-              padding: "14px 28px",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#00ff88";
-              e.currentTarget.style.boxShadow = "0 0 30px var(--accent-glow)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--accent)";
-              e.currentTarget.style.boxShadow = "none";
-            }}
-          >
-            → Start Sharing
-          </a>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <a
+              href="/share"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                background: "var(--accent)",
+                color: "#000",
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                textDecoration: "none",
+                padding: "14px 28px",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#00ff88";
+                e.currentTarget.style.boxShadow = "0 0 30px var(--accent-glow)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--accent)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            >
+              → Start Sharing
+            </a>
+            <a
+              href="https://github.com/upkanid/ipcam/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                background: "transparent",
+                color: "var(--text)",
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                textDecoration: "none",
+                padding: "14px 28px",
+                border: "1px solid var(--border-bright)",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent)";
+                e.currentTarget.style.color = "var(--accent)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border-bright)";
+                e.currentTarget.style.color = "var(--text)";
+              }}
+            >
+              ↓ Download App
+            </a>
+          </div>
         </div>
 
         {/* Right: Viewfinder */}
