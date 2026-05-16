@@ -4,9 +4,11 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import { createSignalingServer, getLocalIP } from './signaling'
 import { VirtualCamera, getPlatformInfo } from './virtualcam'
+import { VirtualMic, getVMicPlatformInfo } from './virtualmic'
 
 let stopSignaling: () => void
 let virtualCam: VirtualCamera
+let virtualMic: VirtualMic
 
 function createWindow(): BrowserWindow {
   const iconPath = join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
@@ -101,7 +103,25 @@ app.whenReady().then(() => {
     virtualCam.writeFrame(Buffer.from(buffer), width, height)
   })
 
+  ipcMain.handle('virtualmic:check', () => getVMicPlatformInfo())
+  ipcMain.handle('virtualmic:recheck', () => virtualMic.recheck())
+
+  ipcMain.on('virtualmic:arm', (event) => {
+    virtualMic.arm((status) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('virtualmic:status', status, virtualMic.getInfo().reason)
+      }
+    })
+  })
+
+  ipcMain.on('virtualmic:disarm', () => virtualMic.disarm())
+
+  ipcMain.on('virtualmic:audio', (_, buffer: ArrayBuffer) => {
+    virtualMic.writeAudio(Buffer.from(buffer))
+  })
+
   virtualCam = new VirtualCamera()
+  virtualMic = new VirtualMic()
   stopSignaling = createSignalingServer(3717)
   const win = createWindow()
   setupAutoUpdater(win)
@@ -113,5 +133,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   virtualCam?.destroy()
+  virtualMic?.destroy()
   if (process.platform !== 'darwin') app.quit()
 })

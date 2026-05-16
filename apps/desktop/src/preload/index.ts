@@ -18,6 +18,16 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('virtualcam:status', (_, status, reason) => cb(status, reason)),
     offStatus: () => ipcRenderer.removeAllListeners('virtualcam:status'),
   },
+  virtualMic: {
+    check: () => ipcRenderer.invoke('virtualmic:check'),
+    recheck: () => ipcRenderer.invoke('virtualmic:recheck'),
+    arm: () => ipcRenderer.send('virtualmic:arm'),
+    disarm: () => ipcRenderer.send('virtualmic:disarm'),
+    sendAudio: (buffer: ArrayBuffer) => ipcRenderer.send('virtualmic:audio', buffer),
+    onStatus: (cb: (status: string, reason: string) => void) =>
+      ipcRenderer.on('virtualmic:status', (_, status, reason) => cb(status, reason)),
+    offStatus: () => ipcRenderer.removeAllListeners('virtualmic:status'),
+  },
   updater: {
     onDownloaded: (cb: (version: string) => void) =>
       ipcRenderer.on('updater:downloaded', (_, version) => cb(version)),

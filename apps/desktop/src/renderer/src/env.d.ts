@@ -14,6 +14,15 @@ interface Window {
       onStatus: (cb: (status: string, reason: string) => void) => void;
       offStatus: () => void;
     };
+    virtualMic: {
+      check: () => Promise<any>;
+      recheck: () => Promise<any>;
+      arm: () => void;
+      disarm: () => void;
+      sendAudio: (buffer: ArrayBuffer) => void;
+      onStatus: (cb: (status: string, reason: string) => void) => void;
+      offStatus: () => void;
+    };
     updater: {
       onDownloaded: (cb: (version: string) => void) => void;
       onAvailable: (cb: (version: string) => void) => void;

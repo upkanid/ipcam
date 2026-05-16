@@ -19,3 +19,11 @@ export interface VCamInfo {
   device?: string;
   backend?: "ffmpeg" | "pyvirtualcam";
 }
+
+export type VMicStatus = "idle" | "starting" | "active" | "error" | "unsupported";
+
+export interface VMicInfo {
+  supported: boolean;
+  reason: string;
+  device?: string;
+}

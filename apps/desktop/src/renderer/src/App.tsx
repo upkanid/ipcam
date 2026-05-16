@@ -11,6 +11,8 @@ import {
   type Status,
   type VCamStatus,
   type VCamInfo,
+  type VMicStatus,
+  type VMicInfo,
 } from "./types";
 import { s } from "./styles";
 import {
@@ -19,6 +21,7 @@ import {
   StatusDetail,
   SignalBars,
   VirtualCamSection,
+  VirtualMicSection,
   SettingsPanel,
 } from "./components";
 
@@ -101,6 +104,12 @@ export default function App() {
   // Virtual camera state
   const [vcamStatus, setVcamStatus] = useState<VCamStatus>("idle");
   const [vcamInfo, setVcamInfo] = useState<VCamInfo | null>(null);
+  // Virtual mic state
+  const [vmicStatus, setVmicStatus] = useState<VMicStatus>("idle");
+  const [vmicInfo, setVmicInfo] = useState<VMicInfo | null>(null);
+  const vmicArmedRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const [error, setError] = useState("");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
@@ -112,9 +121,16 @@ export default function App() {
     window.api?.virtualCam.onStatus((status, _reason) =>
       setVcamStatus(status as VCamStatus),
     );
+    window.api?.virtualMic.check().then(setVmicInfo);
+    window.api?.virtualMic.onStatus((status, _reason) =>
+      setVmicStatus(status as VMicStatus),
+    );
     window.api?.updater.onDownloaded(setUpdateVersion);
     window.api?.updater.onAvailable(setUpdateAvailable);
-    return () => window.api?.virtualCam.offStatus();
+    return () => {
+      window.api?.virtualCam.offStatus();
+      window.api?.virtualMic.offStatus();
+    };
   }, []);
 
   // FPS polling via WebRTC inbound-rtp stats
@@ -211,6 +227,53 @@ export default function App() {
     };
   }, [vcamStatus, status, resolution]);
 
+  // Audio capture loop — captures audio from WebRTC stream and sends to virtual mic
+  useEffect(() => {
+    const armed = vmicStatus !== "idle" && vmicStatus !== "unsupported";
+    if (!armed || status !== "connected" || !videoRef.current) {
+      vmicArmedRef.current = false;
+      if (audioProcessorRef.current) {
+        audioProcessorRef.current.disconnect();
+        audioProcessorRef.current = null;
+      }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+      return;
+    }
+
+    vmicArmedRef.current = true;
+    const stream = videoRef.current.srcObject as MediaStream | null;
+    if (!stream || stream.getAudioTracks().length === 0) return;
+
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    audioCtxRef.current = ctx;
+    const source = ctx.createMediaStreamSource(stream);
+    // 4800 samples = 100ms at 48kHz
+    const processor = ctx.createScriptProcessor(4096, 1, 1);
+    audioProcessorRef.current = processor;
+
+    processor.onaudioprocess = (e) => {
+      if (!vmicArmedRef.current) return;
+      const input = e.inputBuffer.getChannelData(0);
+      // Send float32 PCM directly
+      window.api.virtualMic.sendAudio(input.buffer.slice(0));
+    };
+
+    source.connect(processor);
+    processor.connect(ctx.destination);
+
+    return () => {
+      vmicArmedRef.current = false;
+      processor.disconnect();
+      source.disconnect();
+      ctx.close();
+      audioProcessorRef.current = null;
+      audioCtxRef.current = null;
+    };
+  }, [vmicStatus, status]);
+
   function copyRoom() {
     navigator.clipboard.writeText(roomId);
     setRoomCopied(true);
@@ -227,6 +290,14 @@ export default function App() {
       window.api.virtualCam.arm();
     } else {
       window.api.virtualCam.disarm();
+    }
+  }
+
+  function toggleVirtualMic() {
+    if (vmicStatus === "idle") {
+      window.api.virtualMic.arm();
+    } else {
+      window.api.virtualMic.disarm();
     }
   }
 
@@ -348,6 +419,7 @@ export default function App() {
     intentionalStopRef.current = true;
     setReconnecting(false);
     if (vcamStatus !== "idle") window.api.virtualCam.disarm();
+    if (vmicStatus !== "idle") window.api.virtualMic.disarm();
     cleanupConnection();
     if (videoRef.current) videoRef.current.srcObject = null;
     setStatus("idle");
@@ -709,6 +781,20 @@ export default function App() {
                   vcamInfo={vcamInfo}
                   onToggle={toggleVirtualCam}
                   onRecheck={() => window.api?.virtualCam.recheck().then(setVcamInfo)}
+                />
+              </div>
+
+              <div style={s.panelDivider} />
+
+              {/* Virtual Mic */}
+              <div style={s.section}>
+                <p style={s.sectionLabel}>// VIRTUAL MIC</p>
+                <VirtualMicSection
+                  streamStatus={status}
+                  vmicStatus={vmicStatus}
+                  vmicInfo={vmicInfo}
+                  onToggle={toggleVirtualMic}
+                  onRecheck={() => window.api?.virtualMic.recheck().then(setVmicInfo)}
                 />
               </div>
 
