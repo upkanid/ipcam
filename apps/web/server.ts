@@ -12,12 +12,16 @@ const MAX_MSG_SIZE = 16_384; // 16 KB
 const MAX_PEERS_PER_ROOM = 2;
 const MAX_ROOMS = 10_000;
 const PING_INTERVAL = 30_000; // 30s
-const PONG_TIMEOUT = 10_000; // 10s
 const ROOM_TTL = 10 * 60_000; // 10 min idle → auto-delete
+const RATE_LIMIT_WINDOW = 60_000; // 1 min
+const RATE_LIMIT_MAX_CONN = 10; // max connections per IP per window
 
 // room → set of connected peers
 const rooms = new Map<string, Set<WebSocket>>();
-const roomCreatedAt = new Map<string, number>();
+const roomLastActive = new Map<string, number>();
+
+// IP → connection timestamps (for rate limiting)
+const connRateMap = new Map<string, number[]>();
 
 function validateSignalingMsg(raw: string): boolean {
   if (raw.length > MAX_MSG_SIZE) return false;
@@ -41,29 +45,61 @@ function removePeer(ws: WebSocket, room: string) {
   peers.delete(ws);
   if (!peers.size) {
     rooms.delete(room);
-    roomCreatedAt.delete(room);
+    roomLastActive.delete(room);
   }
 }
 
-// Periodic stale room cleanup
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const timestamps = connRateMap.get(ip) ?? [];
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW);
+  if (recent.length >= RATE_LIMIT_MAX_CONN) {
+    connRateMap.set(ip, recent);
+    return true;
+  }
+  recent.push(now);
+  connRateMap.set(ip, recent);
+  return false;
+}
+
+function log(level: "info" | "warn" | "error", msg: string, data?: Record<string, unknown>) {
+  const entry = { ts: new Date().toISOString(), level, msg, ...data };
+  console[level](JSON.stringify(entry));
+}
+
+// Periodic stale room cleanup + rate limit map pruning
 setInterval(() => {
   const now = Date.now();
-  for (const [room, created] of roomCreatedAt) {
-    if (now - created > ROOM_TTL) {
+  for (const [room, lastActive] of roomLastActive) {
+    if (now - lastActive > ROOM_TTL) {
       const peers = rooms.get(room);
-      if (peers) peers.forEach((ws) => ws.close(1000, "room expired"));
+      if (peers) {
+        log("info", "room_expired", { room, peers: peers.size });
+        peers.forEach((ws) => ws.close(1000, "room expired"));
+      }
       rooms.delete(room);
-      roomCreatedAt.delete(room);
+      roomLastActive.delete(room);
     }
+  }
+  for (const [ip, timestamps] of connRateMap) {
+    const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW);
+    if (!recent.length) connRateMap.delete(ip);
+    else connRateMap.set(ip, recent);
   }
 }, 60_000);
 
 httpServer.on("upgrade", (req, socket, head) => {
-  if (req.url?.startsWith("/ws")) {
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
-  } else {
-    socket.destroy();
+  if (!req.url?.startsWith("/ws")) return socket.destroy();
+
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+    ?? req.socket.remoteAddress ?? "unknown";
+  if (isRateLimited(ip)) {
+    log("warn", "rate_limited", { ip });
+    socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
+    return socket.destroy();
   }
+
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
 });
 
 wss.on("connection", (ws, req) => {
@@ -76,7 +112,7 @@ wss.on("connection", (ws, req) => {
 
   if (!rooms.has(room)) {
     rooms.set(room, new Set());
-    roomCreatedAt.set(room, Date.now());
+    roomLastActive.set(room, Date.now());
   }
   const peers = rooms.get(room)!;
 
@@ -92,6 +128,7 @@ wss.on("connection", (ws, req) => {
   ws.on("message", (data) => {
     const raw = data.toString();
     if (!validateSignalingMsg(raw)) return;
+    roomLastActive.set(room, Date.now());
     peers.forEach((peer) => {
       if (peer !== ws && peer.readyState === WebSocket.OPEN)
         peer.send(raw);
@@ -130,12 +167,12 @@ app.all(
 
 const port = Number(process.env.PORT ?? 3000);
 httpServer.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  log("info", "server_start", { port });
 });
 
 // Graceful shutdown
 function shutdown() {
-  console.log("Shutting down gracefully...");
+  log("info", "shutdown", { rooms: rooms.size, clients: wss.clients.size });
   wss.clients.forEach((ws) => ws.close(1001, "server shutting down"));
   httpServer.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000);

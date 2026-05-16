@@ -4,6 +4,15 @@ export function meta({}: Route.MetaArgs) {
   return [
     { title: "IPCam Upkan — Phone to Webcam, Wirelessly" },
     { name: "description", content: "Stream your phone camera to any PC on your local network via WebRTC. No cloud, no drivers, no cables." },
+    { property: "og:title", content: "IPCam Upkan — Phone to Webcam, Wirelessly" },
+    { property: "og:description", content: "Stream your phone camera to any PC on your local network via WebRTC. No cloud, no drivers, no cables." },
+    { property: "og:type", content: "website" },
+    { property: "og:url", content: "https://ipcam.upkan.id" },
+    { property: "og:image", content: "https://ipcam.upkan.id/logo-icon.png" },
+    { name: "twitter:card", content: "summary" },
+    { name: "twitter:title", content: "IPCam Upkan — Phone to Webcam, Wirelessly" },
+    { name: "twitter:description", content: "Stream your phone camera to any PC via WebRTC. No cloud, no drivers, no cables." },
+    { name: "theme-color", content: "#0d0d0d" },
   ];
 }
 
@@ -25,17 +34,7 @@ export default function Landing() {
       />
 
       {/* ── Nav ───────────────────────────────────────────── */}
-      <nav
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "20px 40px",
-          borderBottom: "1px solid var(--border)",
-          position: "relative",
-          zIndex: 10,
-        }}
-      >
+      <nav className="landing-nav">
         <span
           style={{
             fontFamily: "var(--mono)",
@@ -65,21 +64,9 @@ export default function Landing() {
       </nav>
 
       {/* ── Hero ──────────────────────────────────────────── */}
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "60px",
-          padding: "80px 40px 80px",
-          maxWidth: 1200,
-          margin: "0 auto",
-          alignItems: "center",
-          position: "relative",
-          zIndex: 5,
-        }}
-      >
+      <section className="landing-hero">
         {/* Left: Copy */}
-        <div style={{ animation: "fade-up 0.7s ease both" }}>
+        <div className="landing-hero-copy" style={{ animation: "fade-up 0.7s ease both" }}>
           {/* Status badges */}
           <div
             style={{
@@ -206,16 +193,7 @@ export default function Landing() {
       </section>
 
       {/* ── Steps ─────────────────────────────────────────── */}
-      <section
-        style={{
-          borderTop: "1px solid var(--border)",
-          padding: "60px 40px",
-          maxWidth: 1200,
-          margin: "0 auto",
-          position: "relative",
-          zIndex: 5,
-        }}
-      >
+      <section className="landing-steps">
         <p
           style={{
             fontFamily: "var(--mono)",
@@ -229,14 +207,7 @@ export default function Landing() {
           // Cara Pakai
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 1,
-            background: "var(--border)",
-          }}
-        >
+        <div className="landing-steps-grid">
           {[
             { n: "01", text: "Buka Electron app di PC atau laptop" },
             { n: "02", text: "Catat IP yang ditampilkan di app" },
@@ -282,15 +253,7 @@ export default function Landing() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────── */}
-      <footer
-        style={{
-          borderTop: "1px solid var(--border)",
-          padding: "24px 40px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+      <footer className="landing-footer">
         <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.1em" }}>
           IPCAM_UPKAN
         </span>
