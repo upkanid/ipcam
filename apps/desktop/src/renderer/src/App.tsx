@@ -55,6 +55,7 @@ interface VCamInfo {
   supported: boolean;
   reason: string;
   device?: string;
+  backend?: "ffmpeg" | "pyvirtualcam";
 }
 
 export default function App() {
@@ -628,7 +629,7 @@ export default function App() {
                   vcamStatus={vcamStatus}
                   vcamInfo={vcamInfo}
                   onToggle={toggleVirtualCam}
-                  onRecheck={() => window.api?.virtualCam.check().then(setVcamInfo)}
+                  onRecheck={() => window.api?.virtualCam.recheck().then(setVcamInfo)}
                 />
               </div>
 
@@ -1014,6 +1015,18 @@ function VirtualCamSection({
   }
 
   if (!vcamInfo.supported) {
+    const helpUrl =
+      navigator.platform.startsWith("Win")
+        ? "https://obsproject.com/download"
+        : navigator.platform.startsWith("Mac")
+          ? "https://obsproject.com/download"
+          : "https://github.com/umlaeute/v4l2loopback";
+
+    const helpLabel =
+      navigator.platform.startsWith("Win") || navigator.platform.startsWith("Mac")
+        ? "↗ DOWNLOAD OBS"
+        : "↗ SETUP DRIVER";
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span
@@ -1024,7 +1037,7 @@ function VirtualCamSection({
             letterSpacing: "0.1em",
           }}
         >
-          DRIVER DIPERLUKAN
+          SETUP DIPERLUKAN
         </span>
         <p
           style={{
@@ -1040,7 +1053,7 @@ function VirtualCamSection({
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => window.open("https://obsproject.com/wiki/install-instructions/mac")}
+            onClick={() => window.open(helpUrl)}
             style={{
               flex: 1,
               fontFamily: "var(--mono)",
@@ -1053,7 +1066,7 @@ function VirtualCamSection({
               cursor: "pointer",
             }}
           >
-            ↗ DOWNLOAD OBS
+            {helpLabel}
           </button>
           <button
             onClick={onRecheck}

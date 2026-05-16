@@ -84,6 +84,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('virtualcam:check', () => getPlatformInfo())
+  ipcMain.handle('virtualcam:recheck', () => virtualCam.recheck())
 
   ipcMain.on('virtualcam:arm', (event) => {
     virtualCam.arm((status) => {

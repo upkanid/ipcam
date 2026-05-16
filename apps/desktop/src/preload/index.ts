@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   restartSignaling: (port: number) => ipcRenderer.invoke('restart-signaling', port),
   virtualCam: {
     check: () => ipcRenderer.invoke('virtualcam:check'),
+    recheck: () => ipcRenderer.invoke('virtualcam:recheck'),
     arm: () => ipcRenderer.send('virtualcam:arm'),
     disarm: () => ipcRenderer.send('virtualcam:disarm'),
     sendFrame: (buffer: ArrayBuffer, width: number, height: number) =>
