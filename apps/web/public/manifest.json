@@ -1,0 +1,16 @@
+{
+  "name": "IPCam Upkan",
+  "short_name": "IPCam",
+  "description": "Stream your phone camera to any PC via WebRTC. No cloud, no drivers, no cables.",
+  "start_url": "/share",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "icons": [
+    {
+      "src": "/logo-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

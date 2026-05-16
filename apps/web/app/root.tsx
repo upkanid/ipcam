@@ -13,6 +13,7 @@ import "./app.css";
 export const links: Route.LinksFunction = () => [
   { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
   { rel: "apple-touch-icon", href: "/logo-icon.png" },
+  { rel: "manifest", href: "/manifest.json" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

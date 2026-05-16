@@ -227,10 +227,8 @@ export default function Share() {
     // Connection timeout
     connectionTimeoutRef.current = setTimeout(() => {
       connectionTimeoutRef.current = null;
-      if (status === "connecting") {
-        cleanupConnection();
-        scheduleReconnect();
-      }
+      cleanupConnection();
+      scheduleReconnect();
     }, CONNECTION_TIMEOUT);
 
     const ws = new WebSocket(buildWsUrl());
