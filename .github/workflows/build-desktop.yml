@@ -67,6 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.name }}
+          retention-days: 1
           path: |
             apps/desktop/dist/*.exe
             apps/desktop/dist/*.dmg
