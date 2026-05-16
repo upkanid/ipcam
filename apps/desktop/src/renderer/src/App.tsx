@@ -164,43 +164,52 @@ export default function App() {
   // Frame capture loop — only runs when vcam is armed and stream is connected
   useEffect(() => {
     const armed = vcamStatus !== "idle" && vcamStatus !== "unsupported";
-    if (!armed || status !== "connected") {
+    if (!armed || status !== "connected" || !videoRef.current) {
       vcamArmedRef.current = false;
-      cancelAnimationFrame(rafRef.current);
       return;
     }
 
     vcamArmedRef.current = true;
-    const W = 640,
-      H = 480;
+    
+    // Calculate dimensions once or update on resize
+    const vW = videoRef.current.videoWidth || 640;
+    const vH = videoRef.current.videoHeight || 480;
+    
+    // We target a reasonable resolution (max 1280x720) while maintaining aspect ratio
+    const SCALE = Math.min(1, 1280 / vW, 720 / vH);
+    const W = Math.floor(vW * SCALE);
+    const H = Math.floor(vH * SCALE);
+
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d", { alpha: false })!;
     const INTERVAL = 1000 / 15; // 15 fps
 
-    function loop() {
-      if (!vcamArmedRef.current) return;
+    function capture() {
+      if (!vcamArmedRef.current || !videoRef.current) return;
+      
       const now = performance.now();
       if (
         now - lastFrameRef.current >= INTERVAL &&
-        videoRef.current &&
         videoRef.current.readyState >= 2
       ) {
         lastFrameRef.current = now;
         ctx.drawImage(videoRef.current, 0, 0, W, H);
-        const { data, width, height } = ctx.getImageData(0, 0, W, H);
-        window.api.virtualCam.sendFrame(data.buffer.slice(0), width, height);
+        const { data } = ctx.getImageData(0, 0, W, H);
+        // data.buffer is a SharedArrayBuffer in some contexts, slice to ensure ArrayBuffer
+        window.api.virtualCam.sendFrame(data.buffer.slice(0), W, H);
       }
-      rafRef.current = requestAnimationFrame(loop);
     }
 
-    rafRef.current = requestAnimationFrame(loop);
+    // Use setInterval instead of requestAnimationFrame so it keeps running when minimized
+    const timer = setInterval(capture, INTERVAL);
+    
     return () => {
       vcamArmedRef.current = false;
-      cancelAnimationFrame(rafRef.current);
+      clearInterval(timer);
     };
-  }, [vcamStatus, status]);
+  }, [vcamStatus, status, resolution]);
 
   function copyRoom() {
     navigator.clipboard.writeText(roomId);
