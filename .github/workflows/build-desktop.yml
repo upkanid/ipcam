@@ -70,9 +70,9 @@ jobs:
           name: desktop-${{ matrix.name }}
           retention-days: 1
           path: |
-            apps/desktop/dist/*.exe
-            apps/desktop/dist/*.dmg
-            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/**/*.exe
+            apps/desktop/dist/**/*.dmg
+            apps/desktop/dist/**/*.AppImage
           if-no-files-found: warn
 
   release:
