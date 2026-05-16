@@ -186,7 +186,21 @@ export default function App() {
 
   // Auto-connect on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { startReceiving(); return () => { intentionalStopRef.current = true; cleanupConnection(); }; }, []);
+  useEffect(() => {
+    startReceiving();
+    const onBeforeUnload = () => {
+      intentionalStopRef.current = true;
+      if (vcamStatus !== "idle") window.api?.virtualCam.disarm();
+      if (vmicStatus !== "idle") window.api?.virtualMic.disarm();
+      cleanupConnection();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      intentionalStopRef.current = true;
+      cleanupConnection();
+    };
+  }, []);
 
   // Sync audio to video element (React muted prop doesn't update reactively)
   useEffect(() => {

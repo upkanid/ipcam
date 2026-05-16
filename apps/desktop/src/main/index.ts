@@ -29,6 +29,11 @@ function createWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => win.show())
 
+  win.on('close', () => {
+    virtualCam?.disarm()
+    virtualMic?.disarm()
+  })
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
@@ -99,7 +104,8 @@ app.whenReady().then(() => {
 
   ipcMain.on('virtualcam:disarm', () => virtualCam.disarm())
 
-  ipcMain.on('virtualcam:frame', (_, buffer: ArrayBuffer, width: number, height: number) => {
+  ipcMain.on('virtualcam:frame', (event, buffer: ArrayBuffer, width: number, height: number) => {
+    if (event.sender.isDestroyed()) return
     virtualCam.writeFrame(Buffer.from(buffer), width, height)
   })
 
@@ -116,7 +122,8 @@ app.whenReady().then(() => {
 
   ipcMain.on('virtualmic:disarm', () => virtualMic.disarm())
 
-  ipcMain.on('virtualmic:audio', (_, buffer: ArrayBuffer) => {
+  ipcMain.on('virtualmic:audio', (event, buffer: ArrayBuffer) => {
+    if (event.sender.isDestroyed()) return
     virtualMic.writeAudio(Buffer.from(buffer))
   })
 
