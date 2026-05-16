@@ -8,7 +8,7 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
-RUN pnpm install --frozen-lockfile --config.onlyBuiltDependencies='["esbuild"]'
+RUN pnpm install --frozen-lockfile
 
 # Build the web app
 FROM base AS builder
@@ -26,7 +26,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
-RUN pnpm install --frozen-lockfile --prod --config.onlyBuiltDependencies='["esbuild"]'
+RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/apps/web/build ./apps/web/build
 COPY --from=builder /app/apps/web/server.js ./apps/web/server.js
 WORKDIR /app/apps/web
