@@ -1,19 +1,18 @@
 {
   "name": "ipcam-upkan",
   "private": true,
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  },
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "pnpm --parallel --filter web --filter desktop dev",
-    "dev:web": "pnpm --filter web dev",
-    "dev:desktop": "pnpm --filter desktop dev",
-    "build:web": "pnpm --filter web build",
-    "build:desktop": "pnpm --filter desktop build",
-    "lint": "pnpm -r lint"
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:web": "npm run dev -w web",
+    "dev:desktop": "npm run dev -w desktop",
+    "build:web": "npm run build -w web",
+    "build:desktop": "npm run build -w desktop",
+    "lint": "npm run lint --workspaces --if-present"
   },
   "engines": {
-    "node": ">=20",
-    "pnpm": ">=9"
+    "node": ">=20"
   }
 }
