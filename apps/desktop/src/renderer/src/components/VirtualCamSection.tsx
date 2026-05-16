@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { Status, VCamStatus, VCamInfo } from "../types";
+
 
 export function VirtualCamSection({
   streamStatus,
@@ -41,6 +43,19 @@ export function VirtualCamSection({
         ? "↗ DOWNLOAD OBS"
         : "↗ SETUP DRIVER";
 
+    // Attempt to extract command from reason
+    const commandMatch = vcamInfo.reason.match(/Jalankan:\n([^\n]+)/);
+    const command = commandMatch ? commandMatch[1] : null;
+    const [copied, setCopied] = useState(false);
+
+    const copyCommand = () => {
+      if (command) {
+        navigator.clipboard.writeText(command);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    };
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span
@@ -53,18 +68,39 @@ export function VirtualCamSection({
         >
           SETUP DIPERLUKAN
         </span>
-        <p
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            lineHeight: 1.7,
-            letterSpacing: "0.04em",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {vcamInfo.reason}
-        </p>
+        <div style={{ position: 'relative' }}>
+          <p
+            className="selectable"
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 9,
+              color: "var(--text-muted)",
+              lineHeight: 1.7,
+              letterSpacing: "0.04em",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {vcamInfo.reason}
+          </p>
+          {command && (
+            <button
+              onClick={copyCommand}
+              style={{
+                marginTop: 8,
+                background: "rgba(245, 166, 35, 0.1)",
+                border: "1px solid var(--warning)",
+                color: "var(--warning)",
+                padding: "2px 6px",
+                fontSize: 8,
+                fontFamily: "var(--mono)",
+                cursor: "pointer",
+                borderRadius: 2,
+              }}
+            >
+              {copied ? "✓ COPIED" : "⧉ COPY COMMAND"}
+            </button>
+          )}
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => window.open(helpUrl)}
@@ -102,6 +138,7 @@ export function VirtualCamSection({
       </div>
     );
   }
+
 
   const isActive = vcamStatus === "active";
   const isStarting = vcamStatus === "starting";

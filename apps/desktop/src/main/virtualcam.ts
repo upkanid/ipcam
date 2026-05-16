@@ -111,8 +111,9 @@ function getDarwinInfo(): VCamInfo {
   if (!hasPyvirtualcam(py)) {
     return {
       supported: false,
-      reason: `pyvirtualcam belum terinstall.\n\nJalankan:\n${py} -m pip install pyvirtualcam numpy\n\nPastikan OBS Studio sudah terinstall (dibutuhkan untuk virtual camera).`
+      reason: `pyvirtualcam belum terinstall.\n\nJalankan:\n${py} -m pip install pyvirtualcam numpy --break-system-packages\n\nPastikan OBS Studio sudah terinstall (dibutuhkan untuk virtual camera).`
     }
+
   }
 
   return { supported: true, reason: '', device: 'OBS Virtual Camera', backend: 'pyvirtualcam' }
@@ -130,8 +131,9 @@ function getWindowsInfo(): VCamInfo {
   if (!hasPyvirtualcam(py)) {
     return {
       supported: false,
-      reason: `pyvirtualcam belum terinstall.\n\nJalankan:\n${py} -m pip install pyvirtualcam numpy\n\nPastikan OBS Studio sudah terinstall (dibutuhkan untuk virtual camera).`
+      reason: `pyvirtualcam belum terinstall.\n\nJalankan:\n${py} -m pip install pyvirtualcam numpy --break-system-packages\n\nPastikan OBS Studio sudah terinstall (dibutuhkan untuk virtual camera).`
     }
+
   }
 
   return { supported: true, reason: '', device: 'OBS Virtual Camera', backend: 'pyvirtualcam' }
