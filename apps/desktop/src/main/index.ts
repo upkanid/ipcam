@@ -13,10 +13,10 @@ let virtualMic: VirtualMic
 function createWindow(): BrowserWindow {
   const iconPath = join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
   const win = new BrowserWindow({
-    width: 960,
-    height: 640,
-    minWidth: 760,
-    minHeight: 520,
+    width: 1080,
+    height: 720,
+    minWidth: 860,
+    minHeight: 600,
     show: false,
     autoHideMenuBar: true,
     icon: nativeImage.createFromPath(iconPath),

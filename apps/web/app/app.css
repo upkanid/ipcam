@@ -144,3 +144,44 @@ html, body {
     text-align: center;
   }
 }
+
+/* ─── Share page responsive ──────────────────────── */
+
+.share-controls button,
+.share-toggle-group button,
+.share-action-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 480px) {
+  .share-controls {
+    padding: 12px 14px !important;
+    gap: 8px !important;
+  }
+
+  .share-controls button {
+    min-height: 44px;
+  }
+
+  .share-toggle-group {
+    flex-wrap: wrap;
+  }
+
+  .share-toggle-group button {
+    min-height: 40px;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    flex: 1;
+  }
+
+  .share-settings-panel {
+    padding: 12px !important;
+    gap: 12px !important;
+  }
+
+  .share-action-btn {
+    padding: 18px !important;
+    font-size: 14px !important;
+  }
+}

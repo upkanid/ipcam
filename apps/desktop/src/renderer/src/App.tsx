@@ -91,9 +91,12 @@ export default function App() {
   const [muted, setMuted] = useState(true);
   const [volume, setVolume] = useState(0.8);
   const [showSettings, setShowSettings] = useState(false);
-  const [roomId, setRoomId] = useState(generateRoomId);
+  const [roomId, setRoomId] = useState(() => {
+    try { return localStorage.getItem("ipcam_room") || generateRoomId(); } catch { return generateRoomId(); }
+  });
   const [roomCopied, setRoomCopied] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [trackState, setTrackState] = useState<{ audio: boolean; video: boolean }>({ audio: false, video: false });
 
   // Settings state
   const [port, setPort] = useState(DEFAULT_PORT);
@@ -113,6 +116,11 @@ export default function App() {
   const [error, setError] = useState("");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+
+  // Persist room ID
+  useEffect(() => {
+    try { localStorage.setItem("ipcam_room", roomId); } catch { /* ignore */ }
+  }, [roomId]);
 
   useEffect(() => {
     window.api?.getLocalIP().then(setLocalIP);
@@ -137,19 +145,29 @@ export default function App() {
   useEffect(() => {
     if (status !== "connected" || !pcRef.current) {
       setFps(null);
+      setTrackState({ audio: false, video: false });
       return;
     }
     const interval = setInterval(async () => {
       if (!pcRef.current) return;
+      let hasVideo = false;
+      let hasAudio = false;
       const stats = await pcRef.current.getStats();
       stats.forEach((report) => {
         if (report.type === "inbound-rtp") {
           const r = report as RTCInboundRtpStreamStats;
-          if (r.kind === "video" && typeof r.framesPerSecond === "number") {
-            setFps(Math.round(r.framesPerSecond));
+          if (r.kind === "video") {
+            hasVideo = (r.bytesReceived ?? 0) > 0;
+            if (typeof r.framesPerSecond === "number") {
+              setFps(Math.round(r.framesPerSecond));
+            }
+          }
+          if (r.kind === "audio") {
+            hasAudio = (r.bytesReceived ?? 0) > 0;
           }
         }
       });
+      setTrackState({ audio: hasAudio, video: hasVideo });
     }, 1000);
     return () => clearInterval(interval);
   }, [status]);
@@ -175,6 +193,10 @@ export default function App() {
     if (!videoRef.current) return;
     videoRef.current.muted = muted;
     videoRef.current.volume = volume;
+    // Re-trigger play in case browser paused due to unmute without gesture
+    if (!muted && videoRef.current.paused && videoRef.current.srcObject) {
+      videoRef.current.play().catch(() => {});
+    }
   }, [muted, volume]);
 
   // Frame capture loop — only runs when vcam is armed and stream is connected
@@ -426,7 +448,6 @@ export default function App() {
     setError("");
     setFps(null);
     setResolution(null);
-    setRoomId(generateRoomId());
   }
 
   async function applySettings() {
@@ -511,6 +532,7 @@ export default function App() {
               ref={videoRef}
               autoPlay
               playsInline
+              muted={muted}
               style={{ ...s.video, opacity: status === "connected" ? 1 : 0 }}
               onLoadedMetadata={() => {
                 if (videoRef.current) {
@@ -573,8 +595,8 @@ export default function App() {
           {/* Monitor footer */}
           <div style={s.monitorFooter}>
             {[
-              ["SRC", "PHONE / WebRTC"],
-              ["CODEC", "H.264 / VP9"],
+              ["VIDEO", trackState.video ? "LIVE" : status === "connected" ? "NO SIGNAL" : "—"],
+              ["AUDIO", trackState.audio ? "LIVE" : status === "connected" ? "OFF" : "—"],
               ["PORT", String(port)],
               ["FPS", fps !== null ? String(fps) : "—"],
               ["RES", resolution ?? "—"],
@@ -585,7 +607,14 @@ export default function App() {
               >
                 {i > 0 && <span style={s.mfSep} />}
                 <span style={s.mfLabel}>{label}</span>
-                <span style={s.mfValue}>{value}</span>
+                <span style={{
+                  ...s.mfValue,
+                  color: (label === "VIDEO" || label === "AUDIO") && value === "LIVE"
+                    ? "var(--accent)"
+                    : (label === "VIDEO" || label === "AUDIO") && value === "NO SIGNAL"
+                      ? "var(--danger)"
+                      : undefined,
+                }}>{value}</span>
               </span>
             ))}
           </div>

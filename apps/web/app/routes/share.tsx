@@ -58,14 +58,40 @@ export default function Share() {
   const [error, setError] = useState("");
   const [reconnecting, setReconnecting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [media, setMedia] = useState<MediaSettings>({
-    audio: false,
-    video: true,
-    cameraId: "environment",
-    quality: "720",
+  const [media, setMedia] = useState<MediaSettings>(() => {
+    if (typeof window === "undefined") return { audio: false, video: true, cameraId: "environment", quality: "720" };
+    try {
+      const saved = localStorage.getItem("ipcam_media_settings");
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return { audio: false, video: true, cameraId: "environment", quality: "720" };
   });
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [cameraDetecting, setCameraDetecting] = useState(false);
+  const [trackState, setTrackState] = useState<{ audio: boolean; video: boolean }>({ audio: false, video: false });
+
+  // Monitor actual track state
+  useEffect(() => {
+    if (!streamRef.current) { setTrackState({ audio: false, video: false }); return; }
+    const check = () => {
+      const s = streamRef.current;
+      if (!s) return;
+      const audioTrack = s.getAudioTracks()[0];
+      const videoTrack = s.getVideoTracks()[0];
+      setTrackState({
+        audio: !!(audioTrack && audioTrack.enabled && audioTrack.readyState === "live"),
+        video: !!(videoTrack && videoTrack.enabled && videoTrack.readyState === "live"),
+      });
+    };
+    check();
+    const interval = setInterval(check, 1000);
+    return () => clearInterval(interval);
+  }, [status]);
+
+  // Persist media settings
+  useEffect(() => {
+    try { localStorage.setItem("ipcam_media_settings", JSON.stringify(media)); } catch { /* ignore */ }
+  }, [media]);
 
   // Wake Lock helpers
   const acquireWakeLock = useCallback(async () => {
@@ -389,25 +415,23 @@ export default function Share() {
       </div>
 
       {/* ── Controls ───────────────────────────────────── */}
-      <div style={s.controls}>
-        {/* Media settings toggle — only when idle */}
-        {status === "idle" && (
-          <button
-            onClick={() => setShowSettings((v) => !v)}
-            style={{
-              ...s.settingsToggle,
-              color: showSettings ? "var(--accent)" : "var(--text-muted)",
-              borderColor: showSettings
+      <div className="share-controls" style={s.controls}>
+        {/* Media settings toggle */}
+        <button
+          onClick={() => setShowSettings((v) => !v)}
+          style={{
+            ...s.settingsToggle,
+            color: showSettings ? "var(--accent)" : "var(--text-muted)",
+            borderColor: showSettings
                 ? "var(--accent)"
                 : "var(--border-bright)",
             }}
-          >
-            ⚙ MEDIA SETTINGS
-          </button>
-        )}
+        >
+          ⚙ MEDIA SETTINGS
+        </button>
 
         {/* Expandable settings */}
-        {showSettings && status === "idle" && (
+        {showSettings && (
           <MediaSettingsPanel
             media={media}
             setMedia={setMedia}
@@ -473,6 +497,7 @@ export default function Share() {
             <button
               onClick={startSharing}
               disabled={(!room && !ip.trim()) || (!media.audio && !media.video)}
+              className="share-action-btn"
               style={{
                 ...s.actionBtn,
                 background:
@@ -493,7 +518,7 @@ export default function Share() {
             </button>
           )
         ) : (
-          <button onClick={stopSharing} style={s.stopBtn}>
+          <button onClick={stopSharing} className="share-action-btn" style={s.stopBtn}>
             ■ Stop
           </button>
         )}
@@ -501,23 +526,12 @@ export default function Share() {
         {/* Active stream info */}
         {isStreaming && (
           <div style={s.streamInfo}>
-            <span style={{ color: "var(--accent)" }}>
-              ♪ {media.audio ? "AUDIO ON" : "NO AUDIO"}
+            <span style={{ color: trackState.audio ? "var(--accent)" : "var(--danger)" }}>
+              ♪ {trackState.audio ? "AUDIO LIVE" : "NO AUDIO"}
             </span>
             <span>·</span>
-            <span style={{ color: "var(--accent)" }}>
-              ▶ {media.video ? `VIDEO ${media.quality}p` : "NO VIDEO"}
-            </span>
-            <span>·</span>
-            <span>
-              {media.video
-                ? cameras.find((c) => c.deviceId === media.cameraId)?.label ||
-                  (media.cameraId === "environment"
-                    ? "REAR CAM"
-                    : media.cameraId === "user"
-                      ? "FRONT CAM"
-                      : "ANY CAM")
-                : "—"}
+            <span style={{ color: trackState.video ? "var(--accent)" : "var(--danger)" }}>
+              ▶ {trackState.video ? `VIDEO LIVE ${media.quality}p` : "NO VIDEO"}
             </span>
           </div>
         )}
@@ -549,7 +563,7 @@ function MediaSettingsPanel({
   }
 
   return (
-    <div style={sp.panel}>
+    <div className="share-settings-panel" style={sp.panel}>
       {/* Audio */}
       <div style={sp.row}>
         <span style={sp.label}>AUDIO</span>
@@ -693,7 +707,7 @@ function ToggleGroup<T>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div style={{ display: "flex", gap: 4 }}>
+    <div className="share-toggle-group" style={{ display: "flex", gap: 4 }}>
       {options.map((opt) => (
         <button
           key={String(opt.value)}
