@@ -211,14 +211,15 @@ export class VirtualCamera {
       this.info.device!
     ], { stdio: ['pipe', 'ignore', 'ignore'] })
 
+    const thisProc = this.proc
     this.proc.on('spawn', () => this.statusCb?.('active'))
     this.proc.on('error', (err) => {
       console.error('[VCam] ffmpeg error:', err)
-      this.proc = null
+      if (this.proc === thisProc) this.proc = null
       this.statusCb?.('error')
     })
     this.proc.on('close', () => {
-      this.proc = null
+      if (this.proc === thisProc) this.proc = null
       if (this.armed) this.statusCb?.('idle')
     })
   }
@@ -239,6 +240,7 @@ export class VirtualCamera {
       stdio: ['pipe', 'ignore', 'pipe']
     })
 
+    const thisProc = this.proc
     let ready = false
     this.proc.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
@@ -254,19 +256,19 @@ export class VirtualCamera {
 
     this.proc.on('error', (err) => {
       console.error('[VCam] python error:', err)
-      this.proc = null
+      if (this.proc === thisProc) this.proc = null
       this.statusCb?.('error')
     })
 
     this.proc.on('close', (code) => {
-      this.proc = null
+      if (this.proc === thisProc) this.proc = null
       if (this.armed) {
         this.statusCb?.(code !== 0 ? 'error' : 'idle')
       }
     })
 
     setTimeout(() => {
-      if (this.armed && !ready && this.proc) {
+      if (this.armed && !ready && this.proc === thisProc) {
         console.error('[VCam] pyvirtualcam timeout — no VCAM_READY received')
         this.stopProcess()
         this.statusCb?.('error')
