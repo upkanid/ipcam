@@ -6,7 +6,8 @@ interface Window {
     getVersion: () => Promise<string>;
     restartSignaling: (port: number) => Promise<number>;
     virtualCam: {
-      check: () => Promise<VCamInfo>;
+      check: () => Promise<any>;
+      recheck: () => Promise<any>;
       arm: () => void;
       disarm: () => void;
       sendFrame: (buffer: ArrayBuffer, width: number, height: number) => void;
@@ -15,7 +16,9 @@ interface Window {
     };
     updater: {
       onDownloaded: (cb: (version: string) => void) => void;
+      onAvailable: (cb: (version: string) => void) => void;
       install: () => void;
+      openReleases: () => void;
     };
   };
 }
