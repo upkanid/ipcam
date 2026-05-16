@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { Route } from "./+types/share";
 
@@ -12,7 +12,7 @@ type Quality = "360" | "720" | "1080";
 interface MediaSettings {
   audio: boolean;
   video: boolean;
-  cameraId: string; // deviceId, "environment", "user", or "" (any)
+  cameraId: string;
   quality: Quality;
 }
 
@@ -22,6 +22,15 @@ const QUALITY_MAP: Record<Quality, { width: number; height: number }> = {
   "1080": { width: 1920, height: 1080 },
 };
 
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_DELAY = 1000;
+const CONNECTION_TIMEOUT = 15_000;
+
 export default function Share() {
   const [params] = useSearchParams();
   const room = params.get("room");
@@ -29,8 +38,6 @@ export default function Share() {
     .filter(Boolean)
     .join(":");
 
-  // Cloud deploy: HTTPS without a room param means the page was opened directly,
-  // not via QR. IP-based WS would be blocked by mixed-content policy anyway.
   const noRoomOnHttps =
     !room &&
     typeof window !== "undefined" &&
@@ -39,10 +46,17 @@ export default function Share() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectCountRef = useRef(0);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intentionalStopRef = useRef(false);
 
   const [ip, setIp] = useState(defaultIp);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
+  const [reconnecting, setReconnecting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [media, setMedia] = useState<MediaSettings>({
     audio: false,
@@ -53,10 +67,67 @@ export default function Share() {
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [cameraDetecting, setCameraDetecting] = useState(false);
 
+  // Wake Lock helpers
+  const acquireWakeLock = useCallback(async () => {
+    if ("wakeLock" in navigator) {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+      } catch { /* device may not support it */ }
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    wakeLockRef.current?.release();
+    wakeLockRef.current = null;
+  }, []);
+
+  // Re-acquire wake lock when page becomes visible again
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible" && streamRef.current) {
+        acquireWakeLock();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [acquireWakeLock]);
+
+  // Cleanup on unmount / navigate away
+  useEffect(() => {
+    return () => {
+      intentionalStopRef.current = true;
+      cleanupConnection();
+      releaseWakeLock();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function cleanupConnection() {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    pcRef.current?.close();
+    pcRef.current = null;
+    wsRef.current?.close();
+    wsRef.current = null;
+  }
+
+  function stopTracks() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }
+
   async function detectCameras() {
     setCameraDetecting(true);
     try {
-      // Request permission so labels become available
       const s = await navigator.mediaDevices.getUserMedia({ video: true });
       s.getTracks().forEach((t) => t.stop());
     } catch {
@@ -65,7 +136,6 @@ export default function Share() {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = devices.filter((d) => d.kind === "videoinput");
     setCameras(videoDevices);
-    // Auto-select the first rear camera if found
     const rearCam = videoDevices.find(
       (d) =>
         d.label.toLowerCase().includes("back") ||
@@ -85,11 +155,34 @@ export default function Share() {
     return `ws://${target}`;
   }
 
+  function scheduleReconnect() {
+    if (intentionalStopRef.current) return;
+    if (reconnectCountRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      setError("Gagal reconnect setelah beberapa percobaan. Coba hubungkan ulang secara manual.");
+      setReconnecting(false);
+      setStatus("idle");
+      stopTracks();
+      releaseWakeLock();
+      return;
+    }
+    const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectCountRef.current);
+    reconnectCountRef.current += 1;
+    setReconnecting(true);
+    setError(`Koneksi terputus. Reconnecting dalam ${Math.round(delay / 1000)}s... (${reconnectCountRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectTimerRef.current = null;
+      connectSignaling();
+    }, delay);
+  }
+
   async function startSharing() {
     if (!room && !ip.trim()) return;
     if (!media.audio && !media.video) return;
     setError("");
     setStatus("connecting");
+    intentionalStopRef.current = false;
+    reconnectCountRef.current = 0;
+    setReconnecting(false);
 
     const { width, height } = QUALITY_MAP[media.quality];
     const isFacingMode =
@@ -118,14 +211,32 @@ export default function Share() {
       return;
     }
 
+    streamRef.current = stream;
     if (videoRef.current) videoRef.current.srcObject = stream;
+    await acquireWakeLock();
+    connectSignaling();
+  }
+
+  function connectSignaling() {
+    if (!streamRef.current) return;
+    const stream = streamRef.current;
+
+    cleanupConnection();
+    setStatus("connecting");
+
+    // Connection timeout
+    connectionTimeoutRef.current = setTimeout(() => {
+      connectionTimeoutRef.current = null;
+      if (status === "connecting") {
+        cleanupConnection();
+        scheduleReconnect();
+      }
+    }, CONNECTION_TIMEOUT);
 
     const ws = new WebSocket(buildWsUrl());
     wsRef.current = ws;
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -136,66 +247,72 @@ export default function Share() {
       }
     };
 
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        reconnectCountRef.current = 0;
+        setReconnecting(false);
+        setError("");
+        setStatus("streaming");
+      } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        cleanupConnection();
+        scheduleReconnect();
+      }
+    };
+
     ws.onopen = async () => {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      ws.send(JSON.stringify({ type: "offer", payload: offer }));
-      setStatus("streaming");
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: "offer", payload: offer }));
+      } catch {
+        cleanupConnection();
+        scheduleReconnect();
+      }
     };
 
     ws.onmessage = async (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
-      } else if (msg.type === "candidate") {
-        await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "answer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+        } else if (msg.type === "candidate") {
+          await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+        }
+      } catch {
+        // Ignore malformed signaling messages
       }
     };
 
     ws.onerror = () => {
-      const target = room
-        ? `room ${room}`
-        : ip.trim().includes(":")
-          ? ip.trim()
-          : `${ip.trim()}:3717`;
-      setError(
-        `Tidak bisa terhubung ke ${target}. Pastikan Electron app sedang berjalan.`,
-      );
-      setStatus("idle");
-      stream.getTracks().forEach((t) => t.stop());
+      cleanupConnection();
+      scheduleReconnect();
     };
 
     ws.onclose = (ev) => {
-      if (!ev.wasClean) {
-        setError("Koneksi terputus. Coba hubungkan lagi.");
-        setStatus("idle");
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === "failed") {
-        setError("Koneksi WebRTC gagal. Coba hubungkan lagi.");
-        setStatus("idle");
-        stream.getTracks().forEach((t) => t.stop());
+      if (!ev.wasClean && !intentionalStopRef.current) {
+        cleanupConnection();
+        scheduleReconnect();
       }
     };
   }
 
   function stopSharing() {
-    pcRef.current?.close();
-    wsRef.current?.close();
-    if (videoRef.current?.srcObject) {
-      (videoRef.current.srcObject as MediaStream)
-        .getTracks()
-        .forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
-    }
+    intentionalStopRef.current = true;
+    setReconnecting(false);
+    cleanupConnection();
+    stopTracks();
+    releaseWakeLock();
     setStatus("idle");
+    setError("");
   }
 
   const isStreaming = status === "streaming";
   const isConnecting = status === "connecting";
+  const hasStream = isStreaming || isConnecting || reconnecting;
   const isActive = isStreaming || isConnecting;
 
   return (
@@ -206,7 +323,7 @@ export default function Share() {
           ← BACK
         </a>
         <span style={s.logo}>IPCAM_UPKAN</span>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} reconnecting={reconnecting} />
       </header>
 
       {/* ── Preview ────────────────────────────────────── */}
@@ -216,10 +333,10 @@ export default function Share() {
           autoPlay
           muted
           playsInline
-          style={{ ...s.preview, display: isActive ? "block" : "none" }}
+          style={{ ...s.preview, display: hasStream ? "block" : "none" }}
         />
 
-        {!isActive && (
+        {!hasStream && (
           <div style={s.previewIdle}>
             <CameraIcon />
             <span style={s.previewIdleText}>NO SIGNAL</span>
@@ -623,29 +740,37 @@ function Corner({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
   return <span aria-hidden style={{ ...base, ...map[pos] }} />;
 }
 
-function StatusBadge({ status }: { status: Status }) {
-  const labels: Record<Status, string> = {
-    idle: "OFFLINE",
-    connecting: "CONNECTING",
-    streaming: "LIVE",
-  };
-  const colors: Record<Status, string> = {
-    idle: "var(--text-muted)",
-    connecting: "#f5a623",
-    streaming: "var(--accent)",
-  };
+function StatusBadge({ status, reconnecting }: { status: Status; reconnecting?: boolean }) {
+  const label = reconnecting
+    ? "RECONNECTING"
+    : status === "idle"
+      ? "OFFLINE"
+      : status === "connecting"
+        ? "CONNECTING"
+        : "LIVE";
+  const color = reconnecting
+    ? "#f5a623"
+    : status === "idle"
+      ? "var(--text-muted)"
+      : status === "connecting"
+        ? "#f5a623"
+        : "var(--accent)";
   return (
     <span
       style={{
         fontFamily: "var(--mono)",
         fontSize: 10,
-        color: colors[status],
+        color,
         letterSpacing: "0.15em",
         animation:
-          status === "streaming" ? "rec-blink 2s step-end infinite" : "none",
+          status === "streaming"
+            ? "rec-blink 2s step-end infinite"
+            : reconnecting
+              ? "rec-blink 0.8s step-end infinite"
+              : "none",
       }}
     >
-      {labels[status]}
+      {label}
     </span>
   );
 }

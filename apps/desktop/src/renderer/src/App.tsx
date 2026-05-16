@@ -4,8 +4,17 @@ import { QRCodeSVG } from "qrcode.react";
 const DEFAULT_PORT = 3717;
 const DEFAULT_HOST = "https://ipcam.upkan.id";
 
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+
+const MAX_RECONNECT_ATTEMPTS = 8;
+const RECONNECT_BASE_DELAY = 1000;
+const CONNECTION_TIMEOUT = 15_000;
+
 function generateRoomId(): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(3)))
+  return Array.from(crypto.getRandomValues(new Uint8Array(5)))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
     .toUpperCase();
@@ -67,6 +76,10 @@ export default function App() {
   const vcamArmedRef = useRef(false);
 
   const prevStatusRef = useRef<Status>("idle");
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectCountRef = useRef(0);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intentionalStopRef = useRef(false);
 
   const [localIP, setLocalIP] = useState("—");
   const [status, setStatus] = useState<Status>("idle");
@@ -78,6 +91,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [roomId, setRoomId] = useState(generateRoomId);
   const [roomCopied, setRoomCopied] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   // Settings state
   const [port, setPort] = useState(DEFAULT_PORT);
@@ -139,7 +153,7 @@ export default function App() {
 
   // Auto-connect on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { startReceiving(); }, []);
+  useEffect(() => { startReceiving(); return () => { intentionalStopRef.current = true; cleanupConnection(); }; }, []);
 
   // Sync audio to video element (React muted prop doesn't update reactively)
   useEffect(() => {
@@ -208,21 +222,82 @@ export default function App() {
     }
   }
 
+  function cleanupConnection() {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    pcRef.current?.close();
+    pcRef.current = null;
+    wsRef.current?.close();
+    wsRef.current = null;
+  }
+
+  function scheduleReconnect() {
+    if (intentionalStopRef.current) return;
+    if (reconnectCountRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      setError("Gagal reconnect. Klik START RECEIVING untuk coba lagi.");
+      setReconnecting(false);
+      setStatus("idle");
+      return;
+    }
+    const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectCountRef.current);
+    reconnectCountRef.current += 1;
+    setReconnecting(true);
+    setError(`Reconnecting dalam ${Math.round(delay / 1000)}s... (${reconnectCountRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectTimerRef.current = null;
+      connectToSignaling();
+    }, delay);
+  }
+
   function startReceiving() {
     setError("");
-    const ws = new WebSocket(getSignalingUrl(hostUrl, roomId, port));
-    wsRef.current = ws;
+    intentionalStopRef.current = false;
+    reconnectCountRef.current = 0;
+    setReconnecting(false);
+    connectToSignaling();
+  }
+
+  function connectToSignaling() {
+    cleanupConnection();
     setStatus("waiting");
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    connectionTimeoutRef.current = setTimeout(() => {
+      connectionTimeoutRef.current = null;
+      cleanupConnection();
+      scheduleReconnect();
+    }, CONNECTION_TIMEOUT);
+
+    const ws = new WebSocket(getSignalingUrl(hostUrl, roomId, port));
+    wsRef.current = ws;
+
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
 
     pc.ontrack = (ev) => {
       if (videoRef.current) {
         videoRef.current.srcObject = ev.streams[0];
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        reconnectCountRef.current = 0;
+        setReconnecting(false);
+        setError("");
         setStatus("connected");
+      } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        cleanupConnection();
+        scheduleReconnect();
       }
     };
 
@@ -233,43 +308,39 @@ export default function App() {
     };
 
     ws.onmessage = async (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === "offer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: "answer", payload: answer }));
-      } else if (msg.type === "candidate") {
-        await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          ws.send(JSON.stringify({ type: "answer", payload: answer }));
+        } else if (msg.type === "candidate") {
+          await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+        }
+      } catch {
+        // Ignore malformed signaling messages
       }
     };
 
     ws.onerror = () => {
-      setError(
-        `Tidak bisa terhubung ke signaling server. Periksa host URL dan port.`,
-      );
-      setStatus("idle");
+      cleanupConnection();
+      scheduleReconnect();
     };
 
     ws.onclose = (ev) => {
-      if (!ev.wasClean) {
-        setError("Koneksi ke signaling server terputus.");
-        setStatus("idle");
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === "failed") {
-        setError("Koneksi WebRTC gagal. Coba start receiving lagi.");
-        setStatus("idle");
+      if (!ev.wasClean && !intentionalStopRef.current) {
+        cleanupConnection();
+        scheduleReconnect();
       }
     };
   }
 
   function stop() {
+    intentionalStopRef.current = true;
+    setReconnecting(false);
     if (vcamStatus !== "idle") window.api.virtualCam.disarm();
-    pcRef.current?.close();
-    wsRef.current?.close();
+    cleanupConnection();
     if (videoRef.current) videoRef.current.srcObject = null;
     setStatus("idle");
     setError("");
@@ -295,7 +366,7 @@ export default function App() {
         <span style={s.headerLogo}>IPCAM_UPKAN</span>
 
         <div style={s.headerCenter}>
-          <StatusPill status={status} />
+          <StatusPill status={status} reconnecting={reconnecting} />
         </div>
 
         <div style={s.headerRight}>
@@ -849,17 +920,21 @@ function Corner({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
   return <span aria-hidden style={{ ...base, ...map[pos] }} />;
 }
 
-function StatusPill({ status }: { status: Status }) {
-  const colors: Record<Status, string> = {
-    idle: "var(--text-muted)",
-    waiting: "var(--warning)",
-    connected: "var(--accent)",
-  };
-  const labels: Record<Status, string> = {
-    idle: "OFFLINE",
-    waiting: "WAITING",
-    connected: "CONNECTED",
-  };
+function StatusPill({ status, reconnecting }: { status: Status; reconnecting?: boolean }) {
+  const color = reconnecting
+    ? "var(--warning)"
+    : status === "idle"
+      ? "var(--text-muted)"
+      : status === "waiting"
+        ? "var(--warning)"
+        : "var(--accent)";
+  const label = reconnecting
+    ? "RECONNECTING"
+    : status === "idle"
+      ? "OFFLINE"
+      : status === "waiting"
+        ? "WAITING"
+        : "CONNECTED";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span
@@ -867,12 +942,12 @@ function StatusPill({ status }: { status: Status }) {
           width: 7,
           height: 7,
           borderRadius: "50%",
-          background: colors[status],
+          background: color,
           display: "inline-block",
           animation:
             status === "connected"
               ? "pulse-ring 2s ease infinite"
-              : status === "waiting"
+              : status === "waiting" || reconnecting
                 ? "blink 0.9s step-end infinite"
                 : "none",
         }}
@@ -881,11 +956,11 @@ function StatusPill({ status }: { status: Status }) {
         style={{
           fontFamily: "var(--mono)",
           fontSize: 11,
-          color: colors[status],
+          color,
           letterSpacing: "0.16em",
         }}
       >
-        {labels[status]}
+        {label}
       </span>
     </div>
   );
