@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name (e.g. v1.2.0). If empty, uses version from package.json'
+        required: false
+        default: ''
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -79,6 +84,21 @@ jobs:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version and tag
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          if [[ -n "${{ github.event.inputs.tag_name }}" ]]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG="v$VERSION"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -88,5 +108,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.meta.outputs.tag }}
           files: artifacts/**/*
           generate_release_notes: true
