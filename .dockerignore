@@ -7,3 +7,6 @@
 apps/desktop
 CLAUDE.md
 *.md
+!package-lock.json
+!package.json
+!apps/web/package.json
