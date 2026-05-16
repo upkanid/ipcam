@@ -70,5 +70,8 @@
       "icon": "resources/icon.ico",
       "target": "nsis"
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
