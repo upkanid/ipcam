@@ -68,7 +68,7 @@ The phone-side UI is hosted at **[ipcam.upkan.id](https://ipcam.upkan.id)** — 
 
 ```bash
 # Build
-pnpm --filter web build
+npm run build -w web
 
 # Run (Docker)
 docker build -f apps/web/Dockerfile -t ipcam-web .
@@ -81,20 +81,20 @@ Or deploy the image to any Node-capable host (Coolify, Railway, Fly, etc.). The 
 
 ## Development
 
-**Requirements:** Node ≥ 22, pnpm ≥ 9
+**Requirements:** Node ≥ 22, npm ≥ 10
 
 ```bash
 # Install
-pnpm install
+npm install
 
 # Run both apps in parallel
-pnpm dev
+npm run dev
 
 # Web only  (localhost:5173)
-pnpm dev:web
+npm run dev:web
 
 # Desktop only  (renderer on localhost:5174)
-pnpm dev:desktop
+npm run dev:desktop
 ```
 
 For local dev, change the **Web App URL** in the desktop settings panel from `https://ipcam.upkan.id` to `http://<your-ip>:5173`. The desktop will switch to LAN mode and generate an IP-based QR.

@@ -6,12 +6,12 @@ on:
     paths:
       - 'apps/web/**'
       - 'package.json'
-      - 'pnpm-lock.yaml'
+      - 'package-lock.json'
   pull_request:
     paths:
       - 'apps/web/**'
       - 'package.json'
-      - 'pnpm-lock.yaml'
+      - 'package-lock.json'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -23,18 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
-      - run: pnpm install --frozen-lockfile
+      - run: npm ci
 
-      - run: pnpm --filter web typecheck
+      - run: npm run typecheck -w web
 
   build:
     name: Build
@@ -42,15 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
-      - run: pnpm install --frozen-lockfile
+      - run: npm ci
 
-      - run: pnpm --filter web build
+      - run: npm run build -w web

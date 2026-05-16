@@ -27,23 +27,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build Electron app
-        run: pnpm --filter desktop build
+        run: npm run build -w desktop
 
       - name: Package (electron-builder)
-        run: pnpm --filter desktop dist --publish never
+        run: npm run dist -w desktop -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           SKIP_NOTARIZE: true

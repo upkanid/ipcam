@@ -6,29 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install all workspace dependencies
-pnpm install
+npm install
 
 # Development
-pnpm dev              # Run both apps in parallel (web + desktop)
-pnpm dev:web          # React Router v7 web app (localhost:5173)
-pnpm dev:desktop      # Electron app with HMR (renderer on localhost:5174)
+npm run dev              # Run both apps in parallel (web + desktop)
+npm run dev:web          # React Router v7 web app (localhost:5173)
+npm run dev:desktop      # Electron app with HMR (renderer on localhost:5174)
 
 # Build
-pnpm build:web
-pnpm build:desktop
-pnpm --filter desktop dist   # Package Electron app via electron-builder
+npm run build:web
+npm run build:desktop
+npm run dist -w desktop  # Package Electron app via electron-builder
 
 # Type checking (web only)
-pnpm --filter web typecheck  # runs react-router typegen && tsc
+npm run typecheck -w web  # runs react-router typegen && tsc
 
 # Run a single workspace command
-pnpm --filter web <script>
-pnpm --filter desktop <script>
+npm run <script> -w web
+npm run <script> -w desktop
 ```
 
 ## Architecture
 
-**Monorepo** (pnpm workspaces) with two apps:
+**Monorepo** (npm workspaces) with two apps:
 
 ```
 apps/web/       — React Router v7, SSR mode, deployed via Docker to Coolify  (dev port 5173)
@@ -95,4 +95,4 @@ Port `3717` is hardcoded in two places: `apps/desktop/src/main/signaling.ts` and
 
 ### Deployment (web)
 
-`apps/web/Dockerfile` uses the React Router v7 default template — update it to use `pnpm` instead of `npm` before deploying. The built output is served via `react-router-serve ./build/server/index.js`.
+`apps/web/Dockerfile` uses the React Router v7 default template. The built output is served via `node server.js`.
