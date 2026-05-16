@@ -12,12 +12,11 @@ const MAX_MSG_SIZE = 16_384; // 16 KB
 const MAX_PEERS_PER_ROOM = 2;
 const MAX_ROOMS = 10_000;
 const PING_INTERVAL = 30_000; // 30s
-const PONG_TIMEOUT = 10_000; // 10s
 const ROOM_TTL = 10 * 60_000; // 10 min idle → auto-delete
 
 // room → set of connected peers
 const rooms = new Map<string, Set<WebSocket>>();
-const roomCreatedAt = new Map<string, number>();
+const roomLastActive = new Map<string, number>();
 
 function validateSignalingMsg(raw: string): boolean {
   if (raw.length > MAX_MSG_SIZE) return false;
@@ -41,19 +40,19 @@ function removePeer(ws: WebSocket, room: string) {
   peers.delete(ws);
   if (!peers.size) {
     rooms.delete(room);
-    roomCreatedAt.delete(room);
+    roomLastActive.delete(room);
   }
 }
 
 // Periodic stale room cleanup
 setInterval(() => {
   const now = Date.now();
-  for (const [room, created] of roomCreatedAt) {
-    if (now - created > ROOM_TTL) {
+  for (const [room, lastActive] of roomLastActive) {
+    if (now - lastActive > ROOM_TTL) {
       const peers = rooms.get(room);
       if (peers) peers.forEach((ws) => ws.close(1000, "room expired"));
       rooms.delete(room);
-      roomCreatedAt.delete(room);
+      roomLastActive.delete(room);
     }
   }
 }, 60_000);
@@ -76,7 +75,7 @@ wss.on("connection", (ws, req) => {
 
   if (!rooms.has(room)) {
     rooms.set(room, new Set());
-    roomCreatedAt.set(room, Date.now());
+    roomLastActive.set(room, Date.now());
   }
   const peers = rooms.get(room)!;
 
@@ -92,6 +91,7 @@ wss.on("connection", (ws, req) => {
   ws.on("message", (data) => {
     const raw = data.toString();
     if (!validateSignalingMsg(raw)) return;
+    roomLastActive.set(room, Date.now());
     peers.forEach((peer) => {
       if (peer !== ws && peer.readyState === WebSocket.OPEN)
         peer.send(raw);
