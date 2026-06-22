@@ -1,87 +1,63 @@
-# Welcome to React Router!
+# IPCam Upkan — Web
 
-A modern, production-ready template for building full-stack React applications using React Router.
+Phone-side UI for IPCam Upkan. Opens in the phone browser via QR code from the desktop app — no install required.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+Handles WebRTC signaling and streams the phone camera to the desktop peer.
 
-## Features
+## Development
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
-
-## Getting Started
-
-### Installation
-
-Install the dependencies:
+**Requirements:** Node ≥ 22, npm ≥ 10
 
 ```bash
+# From repo root
 npm install
-```
 
-### Development
+# Run web only (localhost:5173)
+npm run dev:web
 
-Start the development server with HMR:
-
-```bash
+# Or from this directory
 npm run dev
 ```
 
-Your application will be available at `http://localhost:5173`.
-
-## Building for Production
-
-Create a production build:
+## Build
 
 ```bash
+# From repo root
+npm run build -w web
+
+# Or from this directory
 npm run build
 ```
 
-## Deployment
+Outputs:
+- `build/client/` — static assets
+- `build/server/` — SSR server bundle
+- `server.js` — compiled Express entry point
 
-### Docker Deployment
-
-To build and run using Docker:
+## Production
 
 ```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
+node server.js  # runs on PORT (default 3000)
 ```
 
-The containerized application can be deployed to any platform that supports Docker, including:
+## Docker
 
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
+Build context must be the **repo root** (Dockerfile uses `apps/web/` paths):
 
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
+```bash
+docker build -f apps/web/Dockerfile -t ipcam-web .
+docker run -p 3000:3000 ipcam-web
 ```
 
-## Styling
+## Stack
 
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+| | |
+|---|---|
+| Framework | React Router v7 (SSR) |
+| Server | Express + WebSocket (`ws`) |
+| Styling | Tailwind CSS v4 |
+| Bundler | Vite + esbuild |
 
----
+## CI
 
-Built with ❤️ using React Router.
+Type check and build run automatically on pushes/PRs that touch `apps/web/`.
