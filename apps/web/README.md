@@ -23,7 +23,7 @@ npm run dev
 
 ```bash
 # From repo root
-npm run build -w web
+npm run build:web
 
 # Or from this directory
 npm run build

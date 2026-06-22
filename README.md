@@ -68,7 +68,7 @@ The phone-side UI is hosted at **[ipcam.upkan.id](https://ipcam.upkan.id)** — 
 
 ```bash
 # Build
-npm run build -w web
+npm run build:web
 
 # Run (Docker)
 docker build -f apps/web/Dockerfile -t ipcam-web .

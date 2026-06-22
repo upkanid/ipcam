@@ -21,10 +21,10 @@ npm run dev
 
 ```bash
 # Compile (electron-vite)
-npm run build -w desktop
+npm run build:desktop
 
 # Package installer (electron-builder)
-npm run dist -w desktop
+npm run dist -w apps/desktop
 ```
 
 Output goes to `apps/desktop/dist/`:
