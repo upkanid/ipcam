@@ -160,6 +160,10 @@ export default function Share() {
 
   async function detectCameras() {
     setCameraDetecting(true);
+    if (!navigator.mediaDevices) {
+      setCameraDetecting(false);
+      return;
+    }
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true });
       s.getTracks().forEach((t) => t.stop());

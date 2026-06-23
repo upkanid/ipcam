@@ -14,6 +14,8 @@ export function VirtualMicSection({
   onToggle: () => void;
   onRecheck: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+
   if (!vmicInfo) {
     return (
       <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em" }}>
@@ -39,7 +41,6 @@ export function VirtualMicSection({
 
     const commandMatch = vmicInfo.reason.match(/Jalankan:\n([^\n]+)/);
     const command = commandMatch ? commandMatch[1] : null;
-    const [copied, setCopied] = useState(false);
 
     const copyCommand = () => {
       if (command) {

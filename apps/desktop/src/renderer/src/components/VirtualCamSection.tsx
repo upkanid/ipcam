@@ -15,6 +15,8 @@ export function VirtualCamSection({
   onToggle: () => void;
   onRecheck: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+
   if (!vcamInfo) {
     return (
       <span
@@ -46,7 +48,6 @@ export function VirtualCamSection({
     // Attempt to extract command from reason
     const commandMatch = vcamInfo.reason.match(/Jalankan:\n([^\n]+)/);
     const command = commandMatch ? commandMatch[1] : null;
-    const [copied, setCopied] = useState(false);
 
     const copyCommand = () => {
       if (command) {
