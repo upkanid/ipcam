@@ -43,6 +43,10 @@ jobs:
       - name: Build Electron app
         run: npm run build:desktop
 
+      - name: Ensure 7zip-bin platform binary (macOS ARM)
+        if: runner.os == 'macOS'
+        run: npm rebuild 7zip-bin
+
       - name: Package (electron-builder)
         run: npm run dist -w apps/desktop -- --publish never
         env:
