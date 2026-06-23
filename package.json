@@ -8,6 +8,8 @@
     "dev:web": "npm run dev -w apps/web",
     "dev:desktop": "npm run dev -w apps/desktop",
     "build:web": "npm run build -w apps/web",
-    "build:desktop": "npm run build -w apps/desktop"
+    "build:desktop": "npm run build -w apps/desktop",
+    "typecheck": "npm run typecheck -w apps/web && npm run typecheck -w apps/desktop",
+    "postinstall:electron": "cd node_modules/electron && node install.js && echo -n 'Electron.app/Contents/MacOS/Electron' > path.txt"
   }
 }

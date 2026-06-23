@@ -84,8 +84,11 @@ Or deploy the image to any Node-capable host (Coolify, Railway, Fly, etc.). The 
 **Requirements:** Node ≥ 22, npm ≥ 10
 
 ```bash
-# Install
+# Install dependencies
 npm install
+
+# Fix Electron if needed (macOS)
+npm run postinstall:electron
 
 # Run both apps in parallel
 npm run dev
@@ -95,9 +98,14 @@ npm run dev:web
 
 # Desktop only  (renderer on localhost:5174)
 npm run dev:desktop
+
+# Type check all workspaces
+npm run typecheck
 ```
 
 For local dev, change the **Web App URL** in the desktop settings panel from `https://ipcam.upkan.id` to `http://<your-ip>:5173`. The desktop will switch to LAN mode and generate an IP-based QR.
+
+**Troubleshooting:** See [SETUP.md](./SETUP.md) for common issues.
 
 ---
 

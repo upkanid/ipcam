@@ -8,3 +8,4 @@ out
 *.tsbuildinfo
 .react-router
 build
+package-lock.json
