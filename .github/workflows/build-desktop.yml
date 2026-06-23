@@ -40,6 +40,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Debug platform binaries
+        run: |
+          echo "=== 7zip-bin ==="
+          ls -la node_modules/7zip-bin/mac/ 2>/dev/null || echo "no mac dir"
+          ls -la node_modules/7zip-bin/linux/ 2>/dev/null || echo "no linux dir"
+          ls -la node_modules/7zip-bin/win/ 2>/dev/null || echo "no win dir"
+          echo "=== app-builder-bin ==="
+          ls -la node_modules/app-builder-bin/mac/ 2>/dev/null || echo "no mac dir"
+          ls -la node_modules/app-builder-bin/linux/ 2>/dev/null || echo "no linux dir"
+          ls -la node_modules/app-builder-bin/win/ 2>/dev/null || echo "no win dir"
+          echo "=== node version ==="
+          node -v
+          npm -v
+
       - name: Build Electron app
         run: npm run build:desktop
 
