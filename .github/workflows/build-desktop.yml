@@ -43,17 +43,6 @@ jobs:
       - name: Build Electron app
         run: npm run build:desktop
 
-      - name: Ensure 7zip-bin platform binary (macOS ARM)
-        if: runner.os == 'macOS'
-        run: |
-          ls -la node_modules/7zip-bin/mac/ || true
-          if [ ! -f node_modules/7zip-bin/mac/arm64/7za ]; then
-            echo "arm64 binary missing, reinstalling 7zip-bin..."
-            rm -rf node_modules/7zip-bin
-            npm install 7zip-bin@5.2.0 --no-save
-          fi
-          ls -la node_modules/7zip-bin/mac/arm64/ || true
-
       - name: Package (electron-builder)
         run: npm run dist -w apps/desktop -- --publish never
         env:
