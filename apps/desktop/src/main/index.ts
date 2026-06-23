@@ -39,6 +39,16 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  // Allow DevTools in production via F12 or Ctrl+Shift+I
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (
+      input.type === 'keyDown' &&
+      (input.key === 'F12' || (input.key === 'I' && input.control && input.shift))
+    ) {
+      win.webContents.toggleDevTools()
+    }
+  })
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -122,8 +132,13 @@ app.whenReady().then(() => {
 
   ipcMain.on('virtualmic:disarm', () => virtualMic.disarm())
 
+  let vmicAudioCount = 0
   ipcMain.on('virtualmic:audio', (event, buffer: ArrayBuffer) => {
     if (event.sender.isDestroyed()) return
+    if (vmicAudioCount < 5 || vmicAudioCount % 500 === 0) {
+      console.log(`[VMic] IPC audio #${vmicAudioCount}, bytes=${buffer.byteLength}`)
+    }
+    vmicAudioCount++
     virtualMic.writeAudio(Buffer.from(buffer))
   })
 

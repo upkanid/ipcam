@@ -282,19 +282,40 @@ export default function App() {
 
     vmicArmedRef.current = true;
     const stream = videoRef.current.srcObject as MediaStream | null;
-    if (!stream || stream.getAudioTracks().length === 0) return;
+    if (!stream || stream.getAudioTracks().length === 0) {
+      console.warn('[VMic] No audio tracks in stream');
+      return;
+    }
+
+    console.log('[VMic] Setting up audio capture, tracks:', stream.getAudioTracks().length);
 
     const ctx = new AudioContext({ sampleRate: 48000 });
     audioCtxRef.current = ctx;
+
+    // Ensure AudioContext is running (can be suspended in some Chromium builds)
+    if (ctx.state !== 'running') {
+      console.log('[VMic] AudioContext state:', ctx.state, '— resuming...');
+      ctx.resume().then(() => console.log('[VMic] AudioContext resumed:', ctx.state));
+    }
+
     const source = ctx.createMediaStreamSource(stream);
     const CHUNK = 4800; // must match virtualmic.ts chunkSamples
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     audioProcessorRef.current = processor;
     let pending = new Float32Array(0);
+    let dbgCount = 0;
 
     processor.onaudioprocess = (e) => {
       if (!vmicArmedRef.current) return;
       const input = e.inputBuffer.getChannelData(0);
+
+      // Log first few callbacks + every 100th for debugging
+      if (dbgCount < 5 || dbgCount % 100 === 0) {
+        const maxVal = input.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+        console.log(`[VMic] audio callback #${dbgCount}, samples=${input.length}, peak=${maxVal.toFixed(4)}`);
+      }
+      dbgCount++;
+
       const { chunks, remaining } = flushAudioChunks(pending, input, CHUNK);
       chunks.forEach((buf) => window.api.virtualMic.sendAudio(buf));
       pending = remaining;

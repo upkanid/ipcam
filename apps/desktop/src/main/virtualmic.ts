@@ -9,6 +9,7 @@ export interface VMicInfo {
   supported: boolean
   reason: string
   device?: string
+  deviceIndex?: string
 }
 
 /* ── Python helper: writes PCM float32 mono to virtual audio device ── */
@@ -18,18 +19,28 @@ import sys, struct
 
 def main():
     sample_rate = int(sys.argv[1])
-    device_name = sys.argv[2]
+    device_id = sys.argv[2]
     chunk_samples = int(sys.argv[3])
     chunk_bytes = chunk_samples * 4  # float32
 
     import sounddevice as sd
     import numpy as np
 
+    # Accept device index (integer) or device name (string)
+    try:
+        device = int(device_id)
+    except ValueError:
+        device = device_id
+
+    dev_info = sd.query_devices(device)
+    sys.stderr.write(f"VMIC_DEVICE: {dev_info['name']} (index={device}, hostapi={dev_info['hostapi']})\\n")
+    sys.stderr.flush()
+
     stream = sd.OutputStream(
         samplerate=sample_rate,
         channels=1,
         dtype='float32',
-        device=device_name,
+        device=device,
         blocksize=chunk_samples,
     )
     stream.start()
@@ -75,19 +86,38 @@ function hasSounddevice(py: string): boolean {
 
 /* ── Detect virtual audio device per platform ── */
 
-function findVirtualAudioDevice(py: string): string | null {
+interface VDeviceResult {
+  name: string
+  index: string
+}
+
+function findVirtualAudioDevice(py: string): VDeviceResult | null {
   try {
+    // Print index|name for each output-capable device
     const out = execSync(
-      `${py} -c "import sounddevice as sd; [print(d['name']) for d in sd.query_devices() if d['max_output_channels']>0]"`,
-      { stdio: ['ignore', 'pipe', 'ignore'] }
+      `${py} -c "import sounddevice as sd; [print(f\\"{i}|{d['name']}\\") for i,d in enumerate(sd.query_devices()) if d['max_output_channels']>0]"`,
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000 }
     ).toString()
 
     const lines = out.split('\n').map(l => l.trim()).filter(Boolean)
-    const keywords = ['blackhole', 'vb-cable', 'cable input', 'virtual', 'pipewire']
+    console.log('[VMic] Available output devices:', lines)
+
+    const keywords = ['blackhole', 'vb-cable', 'cable input', 'virtual cable', 'pipewire']
     for (const line of lines) {
-      if (keywords.some(k => line.toLowerCase().includes(k))) return line
+      const sep = line.indexOf('|')
+      if (sep < 0) continue
+      const idx = line.substring(0, sep)
+      const name = line.substring(sep + 1)
+      if (keywords.some(k => name.toLowerCase().includes(k))) {
+        console.log(`[VMic] Found virtual device: "${name}" at index ${idx}`)
+        return { name, index: idx }
+      }
     }
-  } catch { /* skip */ }
+
+    console.log('[VMic] No virtual audio device matched keywords:', keywords)
+  } catch (err) {
+    console.error('[VMic] Error querying devices:', err)
+  }
   return null
 }
 
@@ -114,7 +144,7 @@ function getLinuxInfo(py: string): VMicInfo {
     }
   }
 
-  return { supported: true, reason: '', device }
+  return { supported: true, reason: '', device: device.name, deviceIndex: device.index }
 }
 
 function getDarwinInfo(py: string): VMicInfo {
@@ -133,7 +163,7 @@ function getDarwinInfo(py: string): VMicInfo {
     }
   }
 
-  return { supported: true, reason: '', device }
+  return { supported: true, reason: '', device: device.name, deviceIndex: device.index }
 }
 
 function getWindowsInfo(py: string): VMicInfo {
@@ -152,7 +182,7 @@ function getWindowsInfo(py: string): VMicInfo {
     }
   }
 
-  return { supported: true, reason: '', device }
+  return { supported: true, reason: '', device: device.name, deviceIndex: device.index }
 }
 
 export function getVMicPlatformInfo(): VMicInfo {
@@ -205,8 +235,14 @@ export class VirtualMic {
     }
   }
 
+  private writeCount = 0
+
   writeAudio(data: Buffer): void {
     if (!this.armed || !this.proc) return
+    if (this.writeCount < 3) {
+      console.log(`[VMic] writeAudio #${this.writeCount}, bytes=${data.length}, stdinWritable=${this.proc.stdin?.writable}`)
+    }
+    this.writeCount++
     this.proc.stdin?.write(data)
   }
 
@@ -224,10 +260,13 @@ export class VirtualMic {
       return
     }
 
+    const deviceArg = this.info.deviceIndex ?? this.info.device!
+    console.log(`[VMic] Starting python helper: device="${this.info.device}" index=${this.info.deviceIndex}`)
+
     this.proc = spawn(py, [
       this.helperPath,
       String(this.sampleRate),
-      this.info.device!,
+      deviceArg,
       String(this.chunkSamples),
     ], { stdio: ['pipe', 'ignore', 'pipe'] })
 
@@ -236,11 +275,10 @@ export class VirtualMic {
 
     this.proc.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
+      console.log('[VMic] python stderr:', text.trim())
       if (!ready && text.includes('VMIC_READY')) {
         ready = true
         this.statusCb?.('active')
-      } else {
-        console.error('[VMic] python:', text.trim())
       }
     })
 
@@ -276,6 +314,7 @@ export class VirtualMic {
 
   disarm(): void {
     this.armed = false
+    this.writeCount = 0
     this.stopProcess()
     this.statusCb?.('idle')
     this.statusCb = null
