@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, execSync } from 'child_process'
+import { spawn, ChildProcess, execSync, spawnSync } from 'child_process'
 import { platform, tmpdir } from 'os'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
@@ -18,6 +18,10 @@ const VMIC_HELPER_PY = `
 import sys, struct
 
 def main():
+    if sys.platform == 'win32':
+        import os, msvcrt
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+
     sample_rate = int(sys.argv[1])
     device_id = sys.argv[2]
     chunk_samples = int(sys.argv[3])
@@ -67,9 +71,12 @@ function findPython(): string | null {
   const cmds = platform() === 'win32' ? ['python', 'python3'] : ['python3', 'python']
   for (const cmd of cmds) {
     try {
-      const ver = execSync(`${cmd} --version`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
-      const match = ver.match(/Python\s+(\d+)/)
-      if (match && parseInt(match[1]) >= 3) return cmd
+      const res = spawnSync(cmd, ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] })
+      if (res.status === 0) {
+        const ver = res.stdout.toString().trim()
+        const match = ver.match(/Python\s+(\d+)/)
+        if (match && parseInt(match[1]) >= 3) return cmd
+      }
     } catch { /* skip */ }
   }
   return null
@@ -77,8 +84,8 @@ function findPython(): string | null {
 
 function hasSounddevice(py: string): boolean {
   try {
-    execSync(`${py} -c "import sounddevice"`, { stdio: 'ignore' })
-    return true
+    const res = spawnSync(py, ['-c', 'import sounddevice'], { stdio: 'ignore' })
+    return res.status === 0
   } catch {
     return false
   }
@@ -94,21 +101,38 @@ interface VDeviceResult {
 function findVirtualAudioDevice(py: string): VDeviceResult | null {
   try {
     // Print index|name for each output-capable device
-    const out = execSync(
-      `${py} -c "import sounddevice as sd; [print(f\\"{i}|{d['name']}\\") for i,d in enumerate(sd.query_devices()) if d['max_output_channels']>0]"`,
+    const res = spawnSync(
+      py,
+      [
+        '-c',
+        "import sounddevice as sd; [print(f\"{i}|{d['name']}\") for i,d in enumerate(sd.query_devices()) if d['max_output_channels']>0]"
+      ],
       { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000 }
-    ).toString()
+    )
 
+    if (res.error) {
+      console.error('[VMic] Error querying devices (spawn error):', res.error)
+      return null
+    }
+
+    if (res.status !== 0) {
+      console.error('[VMic] Error querying devices (status code):', res.status, res.stderr?.toString())
+      return null
+    }
+
+    const out = res.stdout.toString()
     const lines = out.split('\n').map(l => l.trim()).filter(Boolean)
     console.log('[VMic] Available output devices:', lines)
 
-    const keywords = ['blackhole', 'vb-cable', 'cable input', 'virtual cable', 'pipewire']
+    const keywords = ['blackhole', 'vb-cable', 'cable input', 'virtual cable', 'pipewire', 'cable']
     for (const line of lines) {
       const sep = line.indexOf('|')
       if (sep < 0) continue
       const idx = line.substring(0, sep)
       const name = line.substring(sep + 1)
-      if (keywords.some(k => name.toLowerCase().includes(k))) {
+      const lowerName = name.toLowerCase()
+      if (lowerName.includes('speaker')) continue // Skip speaker emulation devices which fail on Windows
+      if (keywords.some(k => lowerName.includes(k))) {
         console.log(`[VMic] Found virtual device: "${name}" at index ${idx}`)
         return { name, index: idx }
       }
@@ -124,7 +148,10 @@ function findVirtualAudioDevice(py: string): VDeviceResult | null {
 function getLinuxInfo(py: string): VMicInfo {
   // On Linux, PipeWire/PulseAudio virtual source is simplest
   try {
-    execSync('pactl info', { stdio: 'ignore' })
+    const res = spawnSync('pactl', ['info'], { stdio: 'ignore' })
+    if (res.status !== 0 || res.error) {
+      return { supported: false, reason: 'PulseAudio/PipeWire tidak ditemukan.' }
+    }
   } catch {
     return { supported: false, reason: 'PulseAudio/PipeWire tidak ditemukan.' }
   }

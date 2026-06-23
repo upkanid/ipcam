@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, execSync } from 'child_process'
+import { spawn, ChildProcess, execSync, spawnSync } from 'child_process'
 import { platform, tmpdir } from 'os'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
@@ -62,9 +62,12 @@ function findPython(): string | null {
   const cmds = platform() === 'win32' ? ['python', 'python3'] : ['python3', 'python']
   for (const cmd of cmds) {
     try {
-      const ver = execSync(`${cmd} --version`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
-      const match = ver.match(/Python\s+(\d+)/)
-      if (match && parseInt(match[1]) >= 3) return cmd
+      const res = spawnSync(cmd, ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] })
+      if (res.status === 0) {
+        const ver = res.stdout.toString().trim()
+        const match = ver.match(/Python\s+(\d+)/)
+        if (match && parseInt(match[1]) >= 3) return cmd
+      }
     } catch { /* skip */ }
   }
   return null
@@ -72,8 +75,8 @@ function findPython(): string | null {
 
 function hasPyvirtualcam(pythonCmd: string): boolean {
   try {
-    execSync(`${pythonCmd} -c "import pyvirtualcam"`, { stdio: 'ignore' })
-    return true
+    const res = spawnSync(pythonCmd, ['-c', 'import pyvirtualcam'], { stdio: 'ignore' })
+    return res.status === 0
   } catch {
     return false
   }
@@ -83,7 +86,10 @@ function hasPyvirtualcam(pythonCmd: string): boolean {
 
 function getLinuxInfo(): VCamInfo {
   try {
-    execSync('which ffmpeg', { stdio: 'ignore' })
+    const res = spawnSync('which', ['ffmpeg'], { stdio: 'ignore' })
+    if (res.status !== 0 || res.error) {
+      return { supported: false, reason: 'ffmpeg tidak ditemukan. Jalankan: sudo apt install ffmpeg' }
+    }
   } catch {
     return { supported: false, reason: 'ffmpeg tidak ditemukan. Jalankan: sudo apt install ffmpeg' }
   }
