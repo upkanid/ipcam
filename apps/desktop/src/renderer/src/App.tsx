@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { calcVcamDimensions } from "./vcamScale";
+import { flushAudioChunks } from "./audioChunks";
 import { QRCodeSVG } from "qrcode.react";
 
 import {
@@ -55,6 +57,10 @@ function getShareUrl(
   try {
     const u = new URL(hostUrl);
     if (u.protocol === "https:") return `${hostUrl}/share?room=${roomId}`;
+    // Replace localhost with actual LAN IP so phones can reach the dev server
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") {
+      return `http://${localIP}:${u.port || 5173}/share?ip=${localIP}&port=${localPort}`;
+    }
   } catch {
     /* fallthrough */
   }
@@ -223,14 +229,9 @@ export default function App() {
 
     vcamArmedRef.current = true;
     
-    // Calculate dimensions once or update on resize
     const vW = videoRef.current.videoWidth || 640;
     const vH = videoRef.current.videoHeight || 480;
-    
-    // We target a reasonable resolution (max 1280x720) while maintaining aspect ratio
-    const SCALE = Math.min(1, 1280 / vW, 720 / vH);
-    const W = Math.floor(vW * SCALE);
-    const H = Math.floor(vH * SCALE);
+    const { W, H } = calcVcamDimensions(vW, vH);
 
     const canvas = document.createElement("canvas");
     canvas.width = W;
@@ -286,15 +287,17 @@ export default function App() {
     const ctx = new AudioContext({ sampleRate: 48000 });
     audioCtxRef.current = ctx;
     const source = ctx.createMediaStreamSource(stream);
-    // 4800 samples = 100ms at 48kHz
+    const CHUNK = 4800; // must match virtualmic.ts chunkSamples
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     audioProcessorRef.current = processor;
+    let pending = new Float32Array(0);
 
     processor.onaudioprocess = (e) => {
       if (!vmicArmedRef.current) return;
       const input = e.inputBuffer.getChannelData(0);
-      // Send float32 PCM directly
-      window.api.virtualMic.sendAudio(input.buffer.slice(0));
+      const { chunks, remaining } = flushAudioChunks(pending, input, CHUNK);
+      chunks.forEach((buf) => window.api.virtualMic.sendAudio(buf));
+      pending = remaining;
     };
 
     source.connect(processor);

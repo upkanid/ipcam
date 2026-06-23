@@ -1,5 +1,7 @@
 export const DEFAULT_PORT = 3717;
-export const DEFAULT_HOST = "https://ipcam.upkan.id";
+export const DEFAULT_HOST = import.meta.env.DEV
+  ? "http://localhost:5173"
+  : "https://ipcam.upkan.id";
 
 export const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },

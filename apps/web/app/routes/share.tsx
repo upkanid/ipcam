@@ -70,22 +70,29 @@ export default function Share() {
   const [cameraDetecting, setCameraDetecting] = useState(false);
   const [trackState, setTrackState] = useState<{ audio: boolean; video: boolean }>({ audio: false, video: false });
 
-  // Monitor actual track state
+  // Monitor actual track state (event-based, no polling)
   useEffect(() => {
-    if (!streamRef.current) { setTrackState({ audio: false, video: false }); return; }
-    const check = () => {
-      const s = streamRef.current;
-      if (!s) return;
-      const audioTrack = s.getAudioTracks()[0];
-      const videoTrack = s.getVideoTracks()[0];
+    const stream = streamRef.current;
+    if (!stream) { setTrackState({ audio: false, video: false }); return; }
+    const update = () => {
+      const audioTrack = stream.getAudioTracks()[0];
+      const videoTrack = stream.getVideoTracks()[0];
       setTrackState({
         audio: !!(audioTrack && audioTrack.enabled && audioTrack.readyState === "live"),
         video: !!(videoTrack && videoTrack.enabled && videoTrack.readyState === "live"),
       });
     };
-    check();
-    const interval = setInterval(check, 1000);
-    return () => clearInterval(interval);
+    update();
+    stream.getTracks().forEach((t) => {
+      t.addEventListener("ended", update);
+      t.addEventListener("mute", update);
+      t.addEventListener("unmute", update);
+    });
+    return () => stream.getTracks().forEach((t) => {
+      t.removeEventListener("ended", update);
+      t.removeEventListener("mute", update);
+      t.removeEventListener("unmute", update);
+    });
   }, [status]);
 
   // Persist media settings
@@ -281,6 +288,15 @@ export default function Share() {
         setReconnecting(false);
         setError("");
         setStatus("streaming");
+        // Cap video bitrate to avoid unnecessary CPU/heat
+        const maxKbps = media.quality === "1080" ? 4000 : media.quality === "720" ? 2000 : 800;
+        pc.getSenders().forEach(async (sender) => {
+          if (sender.track?.kind !== "video") return;
+          const params = sender.getParameters();
+          if (!params.encodings?.length) params.encodings = [{}];
+          params.encodings[0].maxBitrate = maxKbps * 1000;
+          await sender.setParameters(params).catch(() => {});
+        });
       } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         cleanupConnection();
         scheduleReconnect();
