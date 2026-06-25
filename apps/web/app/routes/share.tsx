@@ -307,8 +307,11 @@ export default function Share() {
           await sender.setParameters(params).catch(() => {});
         });
       } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        cleanupConnection();
-        scheduleReconnect();
+        // Peer disconnected. Just close this RTCPeerConnection. 
+        // DO NOT kill WebSocket or start reconnect loop. Keep WS open for new/returning viewers.
+        pcRef.current?.close();
+        pcRef.current = null;
+        setStatus("connecting");
       }
     };
 
