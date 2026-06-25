@@ -43,10 +43,13 @@ export default function Share() {
     setSearchParams({ room: randomRoom });
   }
 
-  const noRoomOnHttps =
-    !room &&
-    typeof window !== "undefined" &&
-    window.location.protocol === "https:";
+  // Auto generate room if missing on HTTPS/cloud
+  useEffect(() => {
+    if (!room) {
+      const randomRoom = Math.random().toString(16).substring(2, 10).toLowerCase();
+      setSearchParams({ room: randomRoom }, { replace: true });
+    }
+  }, [room, setSearchParams]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -514,66 +517,34 @@ export default function Share() {
                 </button>
               </div>
             )}
-          </div>
-        ) : noRoomOnHttps ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={s.noRoomNotice}>
-              <span style={s.noRoomIcon}>⬡</span>
-              <div>
-                <p style={s.noRoomTitle}>SCAN QR DI DESKTOP APP</p>
-                <p style={s.noRoomHint}>
-                  Buka IPCAM Upkan di desktop, lalu scan QR code yang tampil.
-                </p>
-              </div>
-            </div>
-            
-            <div style={{ textAlign: "center", margin: "10px 0" }}>
-              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.15em" }}>— ATAU —</span>
-            </div>
-
-            <button
-              onClick={generateRandomRoom}
-              style={{
-                ...s.actionBtn,
-                background: "transparent",
-                color: "var(--accent)",
-                border: "1px solid var(--accent)",
-                cursor: "pointer"
-              }}
-            >
-              Buat Room Cloud Baru
-            </button>
-          </div>
         )}
 
         {error && <p style={s.error}>{error}</p>}
 
         {/* Action button */}
         {status === "idle" ? (
-          !noRoomOnHttps && (
-            <button
-              onClick={startSharing}
-              disabled={(!room && !ip.trim()) || (!media.audio && !media.video)}
-              className="share-action-btn"
-              style={{
-                ...s.actionBtn,
-                background:
-                  (room || ip.trim()) && (media.audio || media.video)
-                    ? "var(--accent)"
-                    : "var(--surface)",
-                color:
-                  (room || ip.trim()) && (media.audio || media.video)
-                    ? "#000"
-                    : "var(--text-muted)",
-                cursor:
-                  (room || ip.trim()) && (media.audio || media.video)
-                    ? "pointer"
-                    : "not-allowed",
-              }}
-            >
-              → Start Sharing
-            </button>
-          )
+          <button
+            onClick={startSharing}
+            disabled={!room || (!media.audio && !media.video)}
+            className="share-action-btn"
+            style={{
+              ...s.actionBtn,
+              background:
+                room && (media.audio || media.video)
+                  ? "var(--accent)"
+                  : "var(--surface)",
+              color:
+                room && (media.audio || media.video)
+                  ? "#000"
+                  : "var(--text-muted)",
+              cursor:
+                room && (media.audio || media.video)
+                  ? "pointer"
+                  : "not-allowed",
+            }}
+          >
+            → Start Sharing
+          </button>
         ) : (
           <button onClick={stopSharing} className="share-action-btn" style={s.stopBtn}>
             ■ Stop
