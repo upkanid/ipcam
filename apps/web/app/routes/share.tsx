@@ -330,6 +330,15 @@ export default function Share() {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
         } else if (msg.type === "candidate") {
           await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+        } else if (msg.type === "peer_joined") {
+          // A new viewer has joined! Send a new offer immediately.
+          try {
+            const offer = await pc.createOffer({ iceRestart: true });
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({ type: "offer", payload: offer }));
+          } catch {
+            // negotiation failed, fallback to reconnect if broken
+          }
         }
       } catch {
         // Ignore malformed signaling messages

@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 const app = express();
 const httpServer = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
-const VALID_SIGNAL_TYPES = /* @__PURE__ */ new Set(["offer", "answer", "candidate"]);
+const VALID_SIGNAL_TYPES = /* @__PURE__ */ new Set(["offer", "answer", "candidate", "peer_joined"]);
 const MAX_MSG_SIZE = 16384;
 function validateSignalingMsg(raw) {
   if (raw.length > MAX_MSG_SIZE) return false;
@@ -95,6 +95,11 @@ wss.on("connection", (ws, req) => {
   const peers = rooms.get(room);
   if (peers.size >= MAX_PEERS_PER_ROOM)
     return void ws.close(1013, "room full");
+  peers.forEach((peer) => {
+    if (peer.readyState === WebSocket.OPEN) {
+      peer.send(JSON.stringify({ type: "peer_joined", payload: {} }));
+    }
+  });
   peers.add(ws);
   ws.__room = room;
   ws.__alive = true;

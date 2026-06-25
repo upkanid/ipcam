@@ -7,7 +7,7 @@ const app = express();
 const httpServer = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
-const VALID_SIGNAL_TYPES = new Set(["offer", "answer", "candidate"]);
+const VALID_SIGNAL_TYPES = new Set(["offer", "answer", "candidate", "peer_joined"]);
 const MAX_MSG_SIZE = 16_384; // 16 KB
 
 function validateSignalingMsg(raw: string): boolean {
@@ -124,6 +124,13 @@ wss.on("connection", (ws, req) => {
 
   if (peers.size >= MAX_PEERS_PER_ROOM)
     return void ws.close(1013, "room full");
+
+  // Notify existing peers that a new peer has joined (helps trigger a new offer immediately)
+  peers.forEach((peer) => {
+    if (peer.readyState === WebSocket.OPEN) {
+      peer.send(JSON.stringify({ type: "peer_joined", payload: {} }));
+    }
+  });
 
   peers.add(ws);
   (ws as any).__room = room;

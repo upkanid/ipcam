@@ -84,11 +84,17 @@ describe("validateSignalingMsg", () => {
     expect(validateSignalingMsg(msg)).toBe(true);
   });
 
-  it("VALID_SIGNAL_TYPES contains exactly offer, answer, candidate", () => {
-    expect(VALID_SIGNAL_TYPES.size).toBe(3);
+  it("accepts valid peer_joined message", () => {
+    const msg = JSON.stringify({ type: "peer_joined", payload: {} });
+    expect(validateSignalingMsg(msg)).toBe(true);
+  });
+
+  it("VALID_SIGNAL_TYPES contains exactly offer, answer, candidate, peer_joined", () => {
+    expect(VALID_SIGNAL_TYPES.size).toBe(4);
     expect(VALID_SIGNAL_TYPES.has("offer")).toBe(true);
     expect(VALID_SIGNAL_TYPES.has("answer")).toBe(true);
     expect(VALID_SIGNAL_TYPES.has("candidate")).toBe(true);
+    expect(VALID_SIGNAL_TYPES.has("peer_joined")).toBe(true);
   });
 });
 
