@@ -546,11 +546,10 @@ export default function Share() {
           </div>
         ) : (
           <div style={{ position: "relative" }}>
-            <span style={s.wsPrefix}>ws://</span>
             <input
               type="text"
               inputMode="url"
-              placeholder="192.168.x.x:3717"
+              placeholder="Masukkan IP Desktop (contoh: 192.168.1.100:3717)"
               value={ip}
               onChange={(e) => setIp(e.target.value)}
               onKeyDown={(e) =>
@@ -559,6 +558,7 @@ export default function Share() {
               disabled={isActive}
               style={{
                 ...s.ipInput,
+                paddingLeft: "16px",
                 color: isActive ? "var(--text-muted)" : "var(--text)",
                 borderColor: isStreaming
                   ? "var(--accent)"

@@ -50,7 +50,7 @@ export default function View() {
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevFramesRef = useRef(0);
 
-  const [ip, setIp] = useState(paramIp);
+  const ip = paramIp;
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
   const [reconnecting, setReconnecting] = useState(false);
@@ -58,7 +58,7 @@ export default function View() {
   const [volume, setVolume] = useState(0.8);
   const [fps, setFps] = useState(0);
   const [resolution, setResolution] = useState("");
-  const [inputRoom, setInputRoom] = useState("");
+  const [target, setTarget] = useState(room || paramIp || "");
   const [trackState, setTrackState] = useState<{
     audio: boolean;
     video: boolean;
@@ -175,9 +175,19 @@ export default function View() {
     }, delay);
   }
 
-  function handleConnectRoom() {
-    if (!inputRoom.trim()) return;
-    setSearchParams({ room: inputRoom.trim() });
+  function handleConnect() {
+    const cleanTarget = target.trim();
+    if (!cleanTarget) return;
+
+    if (/[.:]/.test(cleanTarget) || cleanTarget.toLowerCase() === "localhost") {
+      if (typeof window !== "undefined" && window.location.protocol === "https:") {
+        setError("Koneksi via IP lokal (LAN) tidak didukung pada HTTPS. Silakan gunakan Room ID untuk koneksi cloud.");
+        return;
+      }
+      setSearchParams({ ip: cleanTarget });
+    } else {
+      setSearchParams({ room: cleanTarget });
+    }
   }
 
   function startViewing() {
@@ -415,21 +425,22 @@ export default function View() {
       {/* ── Controls ───────────────────────────────────── */}
       <div style={s.controls}>
         {/* Connection controls when idle */}
-        {status === "idle" && !noRoomOnHttps && (
-          <>
+        {status === "idle" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {!hasParams && (
-              <div style={{ position: "relative" }}>
-                <span style={s.wsPrefix}>ws://</span>
+              <div style={{ display: "flex", gap: 10 }}>
                 <input
                   type="text"
-                  inputMode="url"
-                  placeholder="192.168.x.x:3717"
-                  value={ip}
-                  onChange={(e) => setIp(e.target.value)}
+                  placeholder="Masukkan Room ID atau IP Address"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
                   onKeyDown={(e) =>
-                    e.key === "Enter" && ip.trim() && startViewing()
+                    e.key === "Enter" && target.trim() && handleConnect()
                   }
-                  style={s.ipInput}
+                  style={{
+                    ...s.ipInput,
+                    width: "100%",
+                  }}
                   onFocus={(e) => {
                     e.target.style.borderColor = "var(--accent)";
                   }}
@@ -437,64 +448,36 @@ export default function View() {
                     e.target.style.borderColor = "var(--border-bright)";
                   }}
                 />
+                <button
+                  onClick={handleConnect}
+                  disabled={!target.trim()}
+                  style={{
+                    ...s.actionBtn,
+                    width: "auto",
+                    padding: "0 24px",
+                    background: target.trim() ? "var(--accent)" : "var(--surface)",
+                    color: target.trim() ? "#000" : "var(--text-muted)",
+                    cursor: target.trim() ? "pointer" : "not-allowed",
+                  }}
+                >
+                  → Connect
+                </button>
               </div>
             )}
-            <button
-              onClick={startViewing}
-              disabled={!room && !ip.trim()}
-              style={{
-                ...s.actionBtn,
-                background:
-                  room || ip.trim() ? "var(--accent)" : "var(--surface)",
-                color: room || ip.trim() ? "#000" : "var(--text-muted)",
-                cursor: room || ip.trim() ? "pointer" : "not-allowed",
-              }}
-            >
-              → Connect
-            </button>
-          </>
-        )}
-
-        {/* HTTPS no-room notice */}
-        {status === "idle" && noRoomOnHttps && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={s.noRoomNotice}>
-              <span style={s.noRoomIcon}>⬡</span>
-              <div>
-                <p style={s.noRoomTitle}>CLOUD ROOM REQUIRED</p>
-                <p style={s.noRoomHint}>
-                  Masukkan Room ID yang Anda buat di HP Anda untuk melihat stream.
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <input
-                type="text"
-                placeholder="Masukkan Room ID (contoh: a1b2c3d4)"
-                value={inputRoom}
-                onChange={(e) => setInputRoom(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleConnectRoom()}
-                style={{
-                  ...s.ipInput,
-                  width: "100%",
-                }}
-              />
+            
+            {hasParams && (
               <button
-                onClick={handleConnectRoom}
-                disabled={!inputRoom.trim()}
+                onClick={startViewing}
                 style={{
                   ...s.actionBtn,
-                  width: "auto",
-                  padding: "0 24px",
-                  background: inputRoom.trim() ? "var(--accent)" : "var(--surface)",
-                  color: inputRoom.trim() ? "#000" : "var(--text-muted)",
-                  cursor: inputRoom.trim() ? "pointer" : "not-allowed",
+                  background: "var(--accent)",
+                  color: "#000",
+                  cursor: "pointer",
                 }}
               >
-                Connect
+                → Connect
               </button>
-            </div>
+            )}
           </div>
         )}
 
