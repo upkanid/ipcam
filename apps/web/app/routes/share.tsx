@@ -205,10 +205,12 @@ export default function Share() {
       releaseWakeLock();
       return;
     }
-    const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectCountRef.current);
+    // Cap exponential delay at max 3 seconds for responsive reconnects
+    const exponentialDelay = RECONNECT_BASE_DELAY * Math.pow(1.5, reconnectCountRef.current);
+    const delay = Math.min(3000, exponentialDelay);
     reconnectCountRef.current += 1;
     setReconnecting(true);
-    setError(`Koneksi terputus. Reconnecting dalam ${Math.round(delay / 1000)}s... (${reconnectCountRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+    setError(`Koneksi terputus. Menghubungkan ulang dalam ${(delay / 1000).toFixed(1)}s... (${reconnectCountRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
     reconnectTimerRef.current = setTimeout(() => {
       reconnectTimerRef.current = null;
       connectSignaling();

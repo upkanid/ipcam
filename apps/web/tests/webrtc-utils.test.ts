@@ -97,16 +97,15 @@ describe("constants", () => {
   });
 
   it("MAX_RECONNECT_ATTEMPTS is reasonable", () => {
-    expect(MAX_RECONNECT_ATTEMPTS).toBeGreaterThanOrEqual(3);
-    expect(MAX_RECONNECT_ATTEMPTS).toBeLessThanOrEqual(20);
+    expect(MAX_RECONNECT_ATTEMPTS).toBe(30);
   });
 
-  it("RECONNECT_BASE_DELAY is 1 second", () => {
-    expect(RECONNECT_BASE_DELAY).toBe(1000);
+  it("RECONNECT_BASE_DELAY is 250 milliseconds", () => {
+    expect(RECONNECT_BASE_DELAY).toBe(250);
   });
 
-  it("CONNECTION_TIMEOUT is 15 seconds", () => {
-    expect(CONNECTION_TIMEOUT).toBe(15_000);
+  it("CONNECTION_TIMEOUT is 10 seconds", () => {
+    expect(CONNECTION_TIMEOUT).toBe(10_000);
   });
 
   it("DEFAULT_SIGNALING_PORT is 3717", () => {

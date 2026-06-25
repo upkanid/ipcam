@@ -8,9 +8,9 @@ export const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun1.l.google.com:19302" },
 ];
 
-export const MAX_RECONNECT_ATTEMPTS = 8;
-export const RECONNECT_BASE_DELAY = 1000;
-export const CONNECTION_TIMEOUT = 15_000;
+export const MAX_RECONNECT_ATTEMPTS = 30;
+export const RECONNECT_BASE_DELAY = 250;
+export const CONNECTION_TIMEOUT = 10_000;
 export const DEFAULT_SIGNALING_PORT = 3717;
 
 /**
