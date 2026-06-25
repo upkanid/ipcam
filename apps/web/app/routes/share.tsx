@@ -32,11 +32,16 @@ const QUALITY_MAP: Record<Quality, { width: number; height: number }> = {
 
 
 export default function Share() {
-  const [params] = useSearchParams();
+  const [params, setSearchParams] = useSearchParams();
   const room = params.get("room");
   const defaultIp = [params.get("ip"), params.get("port")]
     .filter(Boolean)
     .join(":");
+
+  function generateRandomRoom() {
+    const randomRoom = Math.random().toString(16).substring(2, 10).toLowerCase();
+    setSearchParams({ room: randomRoom });
+  }
 
   const noRoomOnHttps =
     !room &&
@@ -458,20 +463,86 @@ export default function Share() {
 
         {/* Connection target */}
         {room ? (
-          <div style={s.roomBadge}>
-            <span style={s.roomLabel}>ROOM</span>
-            <span style={s.roomCode}>{room}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={s.roomBadge}>
+              <span style={s.roomLabel}>ROOM</span>
+              <span style={s.roomCode}>{room}</span>
+            </div>
+            
+            {status === "idle" && (
+              <div style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border-bright)",
+                padding: 14,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8
+              }}>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.15em" }}>
+                  LINK VIEWER (PC / LAPTOP):
+                </span>
+                <div style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  color: "var(--accent)",
+                  wordBreak: "break-all",
+                  background: "rgba(0,0,0,0.2)",
+                  padding: "8px 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 2
+                }}>
+                  {typeof window !== "undefined" ? `${window.location.origin}/view?room=${room}` : `/view?room=${room}`}
+                </div>
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/view?room=${room}`;
+                    navigator.clipboard.writeText(url);
+                    alert("Link viewer disalin!");
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--border-bright)",
+                    color: "var(--text)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                    alignSelf: "flex-end"
+                  }}
+                >
+                  Salin Link Viewer
+                </button>
+              </div>
+            )}
           </div>
         ) : noRoomOnHttps ? (
-          <div style={s.noRoomNotice}>
-            <span style={s.noRoomIcon}>⬡</span>
-            <div>
-              <p style={s.noRoomTitle}>SCAN QR DI DESKTOP APP</p>
-              <p style={s.noRoomHint}>
-                Buka IPCAM Upkan di desktop, lalu scan QR code yang tampil.
-                Halaman ini tidak bisa dibuka langsung.
-              </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={s.noRoomNotice}>
+              <span style={s.noRoomIcon}>⬡</span>
+              <div>
+                <p style={s.noRoomTitle}>SCAN QR DI DESKTOP APP</p>
+                <p style={s.noRoomHint}>
+                  Buka IPCAM Upkan di desktop, lalu scan QR code yang tampil.
+                </p>
+              </div>
             </div>
+            
+            <div style={{ textAlign: "center", margin: "10px 0" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.15em" }}>— ATAU —</span>
+            </div>
+
+            <button
+              onClick={generateRandomRoom}
+              style={{
+                ...s.actionBtn,
+                background: "transparent",
+                color: "var(--accent)",
+                border: "1px solid var(--accent)",
+                cursor: "pointer"
+              }}
+            >
+              Buat Room Cloud Baru
+            </button>
           </div>
         ) : (
           <div style={{ position: "relative" }}>

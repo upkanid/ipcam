@@ -25,7 +25,7 @@ type Status = "idle" | "waiting" | "connected";
 
 
 export default function View() {
-  const [params] = useSearchParams();
+  const [params, setSearchParams] = useSearchParams();
   const room = params.get("room");
   const paramIp = [params.get("ip"), params.get("port")]
     .filter(Boolean)
@@ -58,6 +58,7 @@ export default function View() {
   const [volume, setVolume] = useState(0.8);
   const [fps, setFps] = useState(0);
   const [resolution, setResolution] = useState("");
+  const [inputRoom, setInputRoom] = useState("");
   const [trackState, setTrackState] = useState<{
     audio: boolean;
     video: boolean;
@@ -65,7 +66,7 @@ export default function View() {
 
   const hasParams = !!(room || paramIp);
 
-  // ── Auto-connect on mount ──────────────────────────────
+  // ── Auto-connect on mount/param change ─────────────────
   useEffect(() => {
     if (hasParams) {
       startViewing();
@@ -76,7 +77,7 @@ export default function View() {
       stopStatsPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasParams]);
 
   // ── Sync muted/volume to video element ─────────────────
   useEffect(() => {
@@ -172,6 +173,11 @@ export default function View() {
       reconnectTimerRef.current = null;
       connectSignaling();
     }, delay);
+  }
+
+  function handleConnectRoom() {
+    if (!inputRoom.trim()) return;
+    setSearchParams({ room: inputRoom.trim() });
   }
 
   function startViewing() {
@@ -375,7 +381,7 @@ export default function View() {
           <div style={s.previewIdle}>
             <MonitorIcon />
             <span style={s.previewIdleText}>
-              {noRoomOnHttps ? "HTTPS MODE — ROOM REQUIRED" : "NO STREAM"}
+              {noRoomOnHttps ? "ENTER ROOM ID" : "NO STREAM"}
             </span>
           </div>
         )}
@@ -451,14 +457,43 @@ export default function View() {
 
         {/* HTTPS no-room notice */}
         {status === "idle" && noRoomOnHttps && (
-          <div style={s.noRoomNotice}>
-            <span style={s.noRoomIcon}>⬡</span>
-            <div>
-              <p style={s.noRoomTitle}>ROOM PARAMETER REQUIRED</p>
-              <p style={s.noRoomHint}>
-                On HTTPS, a ?room=XXXX parameter is required. Open this page
-                from the desktop app or add ?room=YOUR_CODE to the URL.
-              </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={s.noRoomNotice}>
+              <span style={s.noRoomIcon}>⬡</span>
+              <div>
+                <p style={s.noRoomTitle}>CLOUD ROOM REQUIRED</p>
+                <p style={s.noRoomHint}>
+                  Masukkan Room ID yang Anda buat di HP Anda untuk melihat stream.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Masukkan Room ID (contoh: a1b2c3d4)"
+                value={inputRoom}
+                onChange={(e) => setInputRoom(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleConnectRoom()}
+                style={{
+                  ...s.ipInput,
+                  width: "100%",
+                }}
+              />
+              <button
+                onClick={handleConnectRoom}
+                disabled={!inputRoom.trim()}
+                style={{
+                  ...s.actionBtn,
+                  width: "auto",
+                  padding: "0 24px",
+                  background: inputRoom.trim() ? "var(--accent)" : "var(--surface)",
+                  color: inputRoom.trim() ? "#000" : "var(--text-muted)",
+                  cursor: inputRoom.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Connect
+              </button>
             </div>
           </div>
         )}
