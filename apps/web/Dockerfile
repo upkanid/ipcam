@@ -1,17 +1,12 @@
 FROM node:22-alpine AS base
 
-# Install all deps (dev + prod) for building
-FROM base AS deps
+# Build the web app
+FROM base AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/desktop/package.json ./apps/desktop/
 RUN npm ci -w web
-
-# Build the web app
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY apps/web ./apps/web
 WORKDIR /app/apps/web
 RUN npm run build
