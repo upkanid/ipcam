@@ -544,35 +544,6 @@ export default function Share() {
               Buat Room Cloud Baru
             </button>
           </div>
-        ) : (
-          <div style={{ position: "relative" }}>
-            <input
-              type="text"
-              inputMode="url"
-              placeholder="Masukkan IP Desktop (contoh: 192.168.1.100:3717)"
-              value={ip}
-              onChange={(e) => setIp(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" && status === "idle" && startSharing()
-              }
-              disabled={isActive}
-              style={{
-                ...s.ipInput,
-                paddingLeft: "16px",
-                color: isActive ? "var(--text-muted)" : "var(--text)",
-                borderColor: isStreaming
-                  ? "var(--accent)"
-                  : "var(--border-bright)",
-              }}
-              onFocus={(e) => {
-                if (!isActive) e.target.style.borderColor = "var(--accent)";
-              }}
-              onBlur={(e) => {
-                if (!isActive)
-                  e.target.style.borderColor = "var(--border-bright)";
-              }}
-            />
-          </div>
         )}
 
         {error && <p style={s.error}>{error}</p>}

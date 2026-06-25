@@ -178,16 +178,7 @@ export default function View() {
   function handleConnect() {
     const cleanTarget = target.trim();
     if (!cleanTarget) return;
-
-    if (/[.:]/.test(cleanTarget) || cleanTarget.toLowerCase() === "localhost") {
-      if (typeof window !== "undefined" && window.location.protocol === "https:") {
-        setError("Koneksi via IP lokal (LAN) tidak didukung pada HTTPS. Silakan gunakan Room ID untuk koneksi cloud.");
-        return;
-      }
-      setSearchParams({ ip: cleanTarget });
-    } else {
-      setSearchParams({ room: cleanTarget });
-    }
+    setSearchParams({ room: cleanTarget });
   }
 
   function startViewing() {
@@ -431,7 +422,7 @@ export default function View() {
               <div style={{ display: "flex", gap: 10 }}>
                 <input
                   type="text"
-                  placeholder="Masukkan Room ID atau IP Address"
+                  placeholder="Masukkan Room ID (contoh: a1b2c3d4)"
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
                   onKeyDown={(e) =>
