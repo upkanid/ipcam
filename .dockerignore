@@ -4,7 +4,8 @@
 **/.react-router
 **/build
 **/dist
-apps/desktop
+apps/desktop/*
+!apps/desktop/package.json
 CLAUDE.md
 *.md
 !package-lock.json
