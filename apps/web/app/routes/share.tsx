@@ -465,7 +465,7 @@ export default function Share() {
         )}
 
         {/* Connection target */}
-        {room ? (
+        {room && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={s.roomBadge}>
               <span style={s.roomLabel}>ROOM</span>
@@ -517,6 +517,7 @@ export default function Share() {
                 </button>
               </div>
             )}
+          </div>
         )}
 
         {error && <p style={s.error}>{error}</p>}

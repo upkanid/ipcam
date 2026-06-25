@@ -9,9 +9,9 @@ Point your phone at anything and stream the feed live to your desktop via WebRTC
 ## How it works
 
 ```
-Phone browser  ──── WebRTC offer ────▶  Signaling relay  ◀──── Desktop app
-     │                                                               │
-     └──────────────── WebRTC P2P stream (direct) ─────────────────┘
+Phone browser  ──── WebRTC offer ────▶  Signaling relay  ◀──── Desktop app / Browser viewer
+     │                                                                           │
+     └─────────────── WebRTC P2P stream (direct) ────────────────────────────────┘
 ```
 
 Signaling is brokered by a tiny relay server — the stream itself travels peer-to-peer, so latency is as low as your network allows.
@@ -20,7 +20,7 @@ Two relay modes are supported:
 
 | Mode | When to use | How to connect |
 |---|---|---|
-| **Cloud** (default) | Any network, phone and desktop on different Wi-Fi | Desktop shows room QR → phone scans → both connect via `wss://ipcam.upkan.id` |
+| **Cloud** (default) | Any network, phone and desktop on different Wi-Fi | Share camera from phone directly (auto Room ID) or scan desktop QR → Connect with Room ID on desktop app or browser viewer (`/view`) |
 | **LAN** | Same network, no internet | Desktop shows IP QR → phone opens `/share?ip=…` → direct connection to desktop |
 
 ---

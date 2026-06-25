@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   buildSignalingWsUrl,
-  isBlockedByMixedContent,
   ICE_SERVERS,
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_BASE_DELAY,
@@ -88,23 +87,7 @@ describe("buildSignalingWsUrl", () => {
   });
 });
 
-describe("isBlockedByMixedContent", () => {
-  it("returns true on HTTPS without room", () => {
-    expect(isBlockedByMixedContent(null, "https:")).toBe(true);
-  });
-
-  it("returns false on HTTPS with room", () => {
-    expect(isBlockedByMixedContent("ABC123", "https:")).toBe(false);
-  });
-
-  it("returns false on HTTP without room", () => {
-    expect(isBlockedByMixedContent(null, "http:")).toBe(false);
-  });
-
-  it("returns false on HTTP with room", () => {
-    expect(isBlockedByMixedContent("ABC123", "http:")).toBe(false);
-  });
-});
+// isBlockedByMixedContent is no longer used since IP-based sharing from browser was simplified out.
 
 describe("constants", () => {
   it("ICE_SERVERS has Google STUN servers", () => {

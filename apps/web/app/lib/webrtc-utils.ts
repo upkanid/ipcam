@@ -34,13 +34,4 @@ export function buildSignalingWsUrl(
   return `ws://${target}`;
 }
 
-/**
- * Determine if the connection should be impossible due to mixed-content policy.
- * On HTTPS without a room param, direct WS to an IP is blocked.
- */
-export function isBlockedByMixedContent(
-  room: string | null,
-  protocol: string,
-): boolean {
-  return !room && protocol === "https:";
-}
+

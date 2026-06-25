@@ -44,11 +44,11 @@ There are two modes that determine how the phone and desktop connect:
 | **Cloud** (default) | `hostUrl` is HTTPS (e.g. `https://ipcam.upkan.id`) | Room-based relay: both peers connect to `wss://<host>/ws?room=<roomId>` on the web server |
 | **LAN / dev** | `hostUrl` is HTTP or localhost | Direct: phone → `ws://<desktop-ip>:3717`, desktop renderer → `ws://localhost:3717` |
 
-In **cloud mode**: desktop generates a random `roomId`, encodes it into the QR URL (`/share?room=<roomId>`), and connects to the cloud relay in the same room. The web server (`server.ts`) proxies the WebSocket and routes messages per room.
+In **cloud mode**: desktop or phone generates a random `roomId`. Desktop encodes it into a QR code, or the phone generates one automatically upon opening `/share` directly. Both connect to the cloud relay in the same room. The web server (`server.ts`) proxies the WebSocket and routes messages per room.
 
 In **LAN mode**: desktop shows its local IP in the QR URL (`/share?ip=<ip>&port=3717`). The phone connects directly to the desktop's signaling server. No rooms are used.
 
-The `/share` page opened **directly** on HTTPS without `?room=` shows a "scan QR from desktop" notice — IP-based WS is blocked by mixed-content policy on HTTPS anyway.
+Opening `/share` directly on HTTPS will automatically generate a random Room ID for cloud connection and display a shareable viewer link.
 
 ### Core flow (cloud mode)
 
@@ -56,18 +56,17 @@ The `/share` page opened **directly** on HTTPS without `?room=` shows a "scan QR
 Phone browser (/share?room=XXXX)
   └─ getUserMedia → WebRTC offer
        └─ wss://ipcam.upkan.id/ws?room=XXXX  ← relay in web server (server.ts)
-            └─ wss://ipcam.upkan.id/ws?room=XXXX  ← desktop renderer connects here too
+            └─ wss://ipcam.upkan.id/ws?room=XXXX  ← desktop or web viewer connects here too
                  └─ WebRTC peer-to-peer stream
-                      └─ Electron renderer previews stream
-                           └─ virtual camera output
+                      └─ Viewer (/view?room=XXXX) previews stream
 ```
 
 ### apps/web
 
 Four routes:
 - `/` (`routes/landing.tsx`) — marketing landing page
-- `/share` (`routes/share.tsx`) — phone UI: camera permission, WebRTC offer sender
-- `/view` (`routes/view.tsx`) — web-based WebRTC receiver/viewer (replaces desktop app for viewing). Accepts `?room=XXXX` (cloud), `?ip=x.x.x.x&port=3717` (LAN), `?obs=1` (OBS Browser Source mode with no chrome, transparent bg, auto-connect)
+- `/share` (`routes/share.tsx`) — phone UI: camera permission, WebRTC offer sender. Auto-generates a random Room ID if opened directly on cloud/HTTPS.
+- `/view` (`routes/view.tsx`) — web-based WebRTC receiver/viewer (replaces desktop app for viewing). Accepts `?room=XXXX` (cloud), `?ip=x.x.x.x&port=3717` (LAN), `?obs=1` (OBS Browser Source mode with no chrome, transparent bg, auto-connect). If opened without query params, allows manual entry of Room ID.
 - WebSocket at `/ws?room=<id>` — signaling relay (handled in `server.ts`, not a route). `MAX_PEERS_PER_ROOM` is 4 to support sender + desktop + web viewer + OBS simultaneously.
 
 The `/share` and `/view` pages are entirely client-side (no loaders/actions). They manage the WebRTC peer connection lifecycle in React refs to avoid re-render teardown.
