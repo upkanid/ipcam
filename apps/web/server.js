@@ -7,15 +7,6 @@ const httpServer = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 const VALID_SIGNAL_TYPES = /* @__PURE__ */ new Set(["offer", "answer", "candidate"]);
 const MAX_MSG_SIZE = 16384;
-const MAX_PEERS_PER_ROOM = 2;
-const MAX_ROOMS = 1e4;
-const PING_INTERVAL = 3e4;
-const ROOM_TTL = 10 * 6e4;
-const RATE_LIMIT_WINDOW = 6e4;
-const RATE_LIMIT_MAX_CONN = 10;
-const rooms = /* @__PURE__ */ new Map();
-const roomLastActive = /* @__PURE__ */ new Map();
-const connRateMap = /* @__PURE__ */ new Map();
 function validateSignalingMsg(raw) {
   if (raw.length > MAX_MSG_SIZE) return false;
   try {
@@ -25,6 +16,18 @@ function validateSignalingMsg(raw) {
     return false;
   }
 }
+function isValidRoomId(room) {
+  return /^[A-Fa-f0-9]{6,16}$/.test(room);
+}
+const MAX_PEERS_PER_ROOM = 4;
+const MAX_ROOMS = 1e4;
+const PING_INTERVAL = 3e4;
+const ROOM_TTL = 10 * 6e4;
+const RATE_LIMIT_WINDOW = 6e4;
+const RATE_LIMIT_MAX_CONN = 10;
+const rooms = /* @__PURE__ */ new Map();
+const roomLastActive = /* @__PURE__ */ new Map();
+const connRateMap = /* @__PURE__ */ new Map();
 function removePeer(ws, room) {
   const peers = rooms.get(room);
   if (!peers) return;
@@ -81,7 +84,7 @@ httpServer.on("upgrade", (req, socket, head) => {
 });
 wss.on("connection", (ws, req) => {
   const room = new URLSearchParams(req.url?.split("?")[1] ?? "").get("room");
-  if (!room || !/^[A-Fa-f0-9]{6,16}$/.test(room))
+  if (!room || !isValidRoomId(room))
     return void ws.close(1008, "valid room id required");
   if (!rooms.has(room) && rooms.size >= MAX_ROOMS)
     return void ws.close(1013, "server full");

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { Route } from "./+types/share";
+import {
+  ICE_SERVERS,
+  MAX_RECONNECT_ATTEMPTS,
+  RECONNECT_BASE_DELAY,
+  CONNECTION_TIMEOUT,
+  buildSignalingWsUrl,
+} from "~/lib/webrtc-utils";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Share Camera — IPCam Upkan" }];
@@ -22,14 +29,7 @@ const QUALITY_MAP: Record<Quality, { width: number; height: number }> = {
   "1080": { width: 1920, height: 1080 },
 };
 
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-];
 
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_BASE_DELAY = 1000;
-const CONNECTION_TIMEOUT = 15_000;
 
 export default function Share() {
   const [params] = useSearchParams();
@@ -184,12 +184,7 @@ export default function Share() {
   }
 
   function buildWsUrl(): string {
-    if (room) {
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      return `${proto}://${location.host}/ws?room=${room}`;
-    }
-    const target = ip.trim().includes(":") ? ip.trim() : `${ip.trim()}:3717`;
-    return `ws://${target}`;
+    return buildSignalingWsUrl(room, ip, window.location);
   }
 
   function scheduleReconnect() {

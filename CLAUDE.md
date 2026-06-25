@@ -64,12 +64,13 @@ Phone browser (/share?room=XXXX)
 
 ### apps/web
 
-Three routes:
+Four routes:
 - `/` (`routes/landing.tsx`) — marketing landing page
 - `/share` (`routes/share.tsx`) — phone UI: camera permission, WebRTC offer sender
-- WebSocket at `/ws?room=<id>` — signaling relay (handled in `server.ts`, not a route)
+- `/view` (`routes/view.tsx`) — web-based WebRTC receiver/viewer (replaces desktop app for viewing). Accepts `?room=XXXX` (cloud), `?ip=x.x.x.x&port=3717` (LAN), `?obs=1` (OBS Browser Source mode with no chrome, transparent bg, auto-connect)
+- WebSocket at `/ws?room=<id>` — signaling relay (handled in `server.ts`, not a route). `MAX_PEERS_PER_ROOM` is 4 to support sender + desktop + web viewer + OBS simultaneously.
 
-The `/share` page is entirely client-side (no loaders/actions). It manages the WebRTC peer connection lifecycle in React refs to avoid re-render teardown.
+The `/share` and `/view` pages are entirely client-side (no loaders/actions). They manage the WebRTC peer connection lifecycle in React refs to avoid re-render teardown.
 
 ### apps/desktop
 

@@ -3,15 +3,15 @@ import type { Route } from "./+types/landing";
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "IPCam Upkan — Phone to Webcam, Wirelessly" },
-    { name: "description", content: "Stream your phone camera to any PC on your local network via WebRTC. No cloud, no drivers, no cables." },
+    { name: "description", content: "Stream your phone camera to any PC via WebRTC. View in desktop app, browser, or OBS. No cloud, no drivers, no cables." },
     { property: "og:title", content: "IPCam Upkan — Phone to Webcam, Wirelessly" },
-    { property: "og:description", content: "Stream your phone camera to any PC on your local network via WebRTC. No cloud, no drivers, no cables." },
+    { property: "og:description", content: "Stream your phone camera to any PC via WebRTC. View in desktop app, browser, or OBS." },
     { property: "og:type", content: "website" },
     { property: "og:url", content: "https://ipcam.upkan.id" },
     { property: "og:image", content: "https://ipcam.upkan.id/logo-icon.png" },
     { name: "twitter:card", content: "summary" },
     { name: "twitter:title", content: "IPCam Upkan — Phone to Webcam, Wirelessly" },
-    { name: "twitter:description", content: "Stream your phone camera to any PC via WebRTC. No cloud, no drivers, no cables." },
+    { name: "twitter:description", content: "Stream your phone camera to any PC via WebRTC. View in desktop app, browser, or OBS." },
     { name: "theme-color", content: "#0d0d0d" },
   ];
 }
@@ -35,12 +35,20 @@ export default function Landing() {
         <span className="font-[var(--mono)] text-[13px] text-[var(--accent)] tracking-[0.15em] uppercase">
           IPCAM_UPKAN
         </span>
-        <a
-          href="/share"
-          className="font-[var(--mono)] text-[12px] text-[var(--text-muted)] no-underline tracking-[0.1em] transition-colors duration-200 hover:text-[var(--accent)]"
-        >
-          SHARE CAMERA →
-        </a>
+        <div className="flex items-center gap-6">
+          <a
+            href="/view"
+            className="font-[var(--mono)] text-[12px] text-[var(--text-muted)] no-underline tracking-[0.1em] transition-colors duration-200 hover:text-[var(--accent)]"
+          >
+            VIEW STREAM →
+          </a>
+          <a
+            href="/share"
+            className="font-[var(--mono)] text-[12px] text-[var(--text-muted)] no-underline tracking-[0.1em] transition-colors duration-200 hover:text-[var(--accent)]"
+          >
+            SHARE CAMERA →
+          </a>
+        </div>
       </nav>
 
       {/* ── Hero ── */}
@@ -67,22 +75,22 @@ export default function Landing() {
           </p>
         </div>
 
-        {/* Split panels */}
-        <div className="grid grid-cols-[1fr_auto_1fr] border border-[var(--border)] max-sm:grid-cols-1">
-          {/* Panel: HP */}
+        {/* ── Three panels: Share / View / Desktop ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 border border-[var(--border)]">
+          {/* Panel: HP (Share) */}
           <div
-            className="p-12 [animation:fade-up_0.7s_0.1s_ease_both] opacity-0 max-sm:p-9"
+            className="p-10 [animation:fade-up_0.7s_0.1s_ease_both] opacity-0 max-sm:p-8"
           >
             <span className="block font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] mb-4">
-              01 / KAMU DI HP
+              01 / KIRIM DARI HP
             </span>
             <div className="text-4xl mb-5" aria-hidden>📱</div>
-            <h2 className="font-[var(--display)] text-[clamp(28px,3vw,40px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
-              Jadikan kamera<br />
-              <span className="text-[var(--accent)]">sumber stream</span>
+            <h2 className="font-[var(--display)] text-[clamp(24px,3vw,36px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
+              Share<br />
+              <span className="text-[var(--accent)]">kamera HP</span>
             </h2>
             <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.65] mb-8">
-              Buka halaman ini dari HP, lalu tap tombol di bawah. Kamera HP kamu langsung jadi webcam yang bisa diterima di PC.
+              Buka halaman share dari HP, tap tombol, dan kamera langsung streaming ke viewer manapun.
             </p>
             <a
               href="/share"
@@ -92,32 +100,43 @@ export default function Landing() {
             </a>
           </div>
 
-          {/* Divider */}
+          {/* Panel: Web Viewer */}
           <div
-            aria-hidden
-            className="flex flex-col items-center w-10 py-12 max-sm:flex-row max-sm:w-auto max-sm:h-10 max-sm:py-0 max-sm:px-6"
-          >
-            <div className="w-px flex-1 bg-[var(--border)] max-sm:w-auto max-sm:h-px" />
-            <span className="font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.15em] py-2.5 max-sm:py-0 max-sm:px-2.5">
-              OR
-            </span>
-            <div className="w-px flex-1 bg-[var(--border)] max-sm:w-auto max-sm:h-px" />
-          </div>
-
-          {/* Panel: PC */}
-          <div
-            className="p-12 [animation:fade-up_0.7s_0.2s_ease_both] opacity-0 border-l border-[var(--border)] max-sm:border-l-0 max-sm:border-t max-sm:p-9"
+            className="p-10 [animation:fade-up_0.7s_0.15s_ease_both] opacity-0 border-l border-[var(--border)] max-sm:border-l-0 max-sm:border-t max-sm:p-8"
           >
             <span className="block font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] mb-4">
-              02 / KAMU DI PC
+              02 / TERIMA DI BROWSER
             </span>
-            <div className="text-4xl mb-5" aria-hidden>🖥️</div>
-            <h2 className="font-[var(--display)] text-[clamp(28px,3vw,40px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
-              Terima stream<br />
-              <span className="text-[var(--accent)]">di desktop</span>
+            <div className="text-4xl mb-5" aria-hidden>🌐</div>
+            <h2 className="font-[var(--display)] text-[clamp(24px,3vw,36px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
+              View di<br />
+              <span className="text-[var(--accent)]">browser</span>
             </h2>
             <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.65] mb-8">
-              Download app desktop untuk Windows, macOS, atau Linux. Buka app, scan QR dari HP, dan feed kamera langsung muncul.
+              Tanpa install apapun — buka langsung di browser PC. Juga bisa dipakai sebagai OBS Browser Source.
+            </p>
+            <a
+              href="/view"
+              className="inline-flex items-center gap-2.5 bg-transparent text-[var(--text)] font-[var(--mono)] text-[13px] font-bold tracking-[0.12em] uppercase no-underline px-7 py-3.5 border border-[var(--border-bright)] transition-all duration-200 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            >
+              → Open Viewer
+            </a>
+          </div>
+
+          {/* Panel: Desktop App */}
+          <div
+            className="p-10 [animation:fade-up_0.7s_0.2s_ease_both] opacity-0 border-l border-[var(--border)] max-sm:border-l-0 max-sm:border-t max-sm:p-8"
+          >
+            <span className="block font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] mb-4">
+              03 / DESKTOP APP
+            </span>
+            <div className="text-4xl mb-5" aria-hidden>🖥️</div>
+            <h2 className="font-[var(--display)] text-[clamp(24px,3vw,36px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
+              Virtual<br />
+              <span className="text-[var(--accent)]">camera</span>
+            </h2>
+            <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.65] mb-8">
+              Butuh virtual webcam untuk Zoom/Meet? Download app desktop dengan fitur virtual cam & mic built-in.
             </p>
             <a
               href="https://github.com/upkanid/ipcam/releases/latest"
@@ -131,20 +150,20 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Steps ── */}
+      {/* ── How to use ── */}
       <section className="relative z-[5] max-w-[1200px] mx-auto px-10 py-16 border-t border-[var(--border)] mt-16 max-sm:px-5 max-sm:py-10 max-sm:mt-10">
         <p className="font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] uppercase mb-10">
-          // Cara Pakai
+          // Cara Pakai — Web Viewer
         </p>
         <div
           className="grid gap-px bg-[var(--border)]"
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
         >
           {[
-            { n: "01", label: "PC", text: "Download & buka app desktop di PC" },
-            { n: "02", label: "PC", text: "App menampilkan QR code room" },
-            { n: "03", label: "HP", text: "Scan QR dari HP — halaman /share terbuka otomatis" },
-            { n: "04", label: "HP", text: "Tap Start Sharing — stream langsung aktif di PC" },
+            { n: "01", label: "HP", text: "Scan QR atau buka /share di HP" },
+            { n: "02", label: "PC", text: "Buka /view di browser PC — masukkan Room ID yang sama" },
+            { n: "03", label: "HP", text: "Tap Start Sharing — stream langsung muncul di browser PC" },
+            { n: "04", label: "PC", text: "Fullscreen, unmute audio, atau pakai sebagai OBS source" },
           ].map(({ n, label, text }) => (
             <div
               key={n}
@@ -161,6 +180,82 @@ export default function Landing() {
               </p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── OBS Browser Source Section ── */}
+      <section className="relative z-[5] max-w-[1200px] mx-auto px-10 pb-16 max-sm:px-5 max-sm:pb-10">
+        <div className="border border-[var(--border)] p-10 max-sm:p-6">
+          <div className="flex items-start gap-5 max-sm:flex-col">
+            <div className="text-3xl flex-shrink-0" aria-hidden>🎬</div>
+            <div className="flex-1">
+              <p className="font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] uppercase mb-3">
+                // OBS Browser Source
+              </p>
+              <h3 className="font-[var(--display)] text-[clamp(20px,2.5vw,28px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
+                Pakai sebagai <span className="text-[var(--accent)]">OBS source</span>
+              </h3>
+              <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.7] mb-6">
+                Tambahkan Browser Source di OBS dengan URL di bawah. Stream HP kamu langsung muncul sebagai source — tanpa virtual camera driver, tanpa app tambahan.
+              </p>
+              <div className="font-[var(--mono)] text-[13px] text-[var(--accent)] bg-[var(--surface)] border border-[var(--border-bright)] px-5 py-3.5 mb-5 break-all select-all tracking-[0.05em]">
+                https://ipcam.upkan.id/view?room=ROOM_ID&obs=1
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Width", value: "1920" },
+                  { label: "Height", value: "1080" },
+                  { label: "FPS", value: "30" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.12em]">
+                      {label}:
+                    </span>
+                    <span className="font-[var(--mono)] text-[12px] text-[var(--text)] tracking-[0.08em]">
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Comparison table ── */}
+      <section className="relative z-[5] max-w-[1200px] mx-auto px-10 pb-16 max-sm:px-5 max-sm:pb-10">
+        <p className="font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] uppercase mb-6">
+          // Perbandingan
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse font-[var(--mono)] text-[12px]">
+            <thead>
+              <tr className="border-b border-[var(--border-bright)]">
+                <th className="text-left py-3 px-4 text-[var(--text-muted)] tracking-[0.12em] text-[10px] font-normal">FITUR</th>
+                <th className="text-center py-3 px-4 text-[var(--accent)] tracking-[0.12em] text-[10px] font-normal">WEB VIEWER</th>
+                <th className="text-center py-3 px-4 text-[var(--text-muted)] tracking-[0.12em] text-[10px] font-normal">OBS SOURCE</th>
+                <th className="text-center py-3 px-4 text-[var(--text-muted)] tracking-[0.12em] text-[10px] font-normal">DESKTOP APP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { feature: "View stream", web: true, obs: true, desktop: true },
+                { feature: "Audio", web: true, obs: true, desktop: true },
+                { feature: "Tanpa install", web: true, obs: true, desktop: false },
+                { feature: "OBS source langsung", web: false, obs: true, desktop: false },
+                { feature: "Virtual camera", web: false, obs: false, desktop: true },
+                { feature: "Virtual mic", web: false, obs: false, desktop: true },
+                { feature: "Fullscreen", web: true, obs: false, desktop: true },
+              ].map(({ feature, web, obs, desktop }) => (
+                <tr key={feature} className="border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors duration-150">
+                  <td className="py-3 px-4 text-[var(--text)]">{feature}</td>
+                  <td className="py-3 px-4 text-center">{web ? <span className="text-[var(--accent)]">✓</span> : <span className="text-[var(--text-muted)]">—</span>}</td>
+                  <td className="py-3 px-4 text-center">{obs ? <span className="text-[var(--accent)]">✓</span> : <span className="text-[var(--text-muted)]">—</span>}</td>
+                  <td className="py-3 px-4 text-center">{desktop ? <span className="text-[var(--accent)]">✓</span> : <span className="text-[var(--text-muted)]">—</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 

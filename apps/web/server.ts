@@ -9,19 +9,6 @@ const wss = new WebSocketServer({ noServer: true });
 
 const VALID_SIGNAL_TYPES = new Set(["offer", "answer", "candidate"]);
 const MAX_MSG_SIZE = 16_384; // 16 KB
-const MAX_PEERS_PER_ROOM = 2;
-const MAX_ROOMS = 10_000;
-const PING_INTERVAL = 30_000; // 30s
-const ROOM_TTL = 10 * 60_000; // 10 min idle → auto-delete
-const RATE_LIMIT_WINDOW = 60_000; // 1 min
-const RATE_LIMIT_MAX_CONN = 10; // max connections per IP per window
-
-// room → set of connected peers
-const rooms = new Map<string, Set<WebSocket>>();
-const roomLastActive = new Map<string, number>();
-
-// IP → connection timestamps (for rate limiting)
-const connRateMap = new Map<string, number[]>();
 
 function validateSignalingMsg(raw: string): boolean {
   if (raw.length > MAX_MSG_SIZE) return false;
@@ -38,6 +25,25 @@ function validateSignalingMsg(raw: string): boolean {
     return false;
   }
 }
+
+function isValidRoomId(room: string): boolean {
+  return /^[A-Fa-f0-9]{6,16}$/.test(room);
+}
+const MAX_PEERS_PER_ROOM = 4;
+const MAX_ROOMS = 10_000;
+const PING_INTERVAL = 30_000; // 30s
+const ROOM_TTL = 10 * 60_000; // 10 min idle → auto-delete
+const RATE_LIMIT_WINDOW = 60_000; // 1 min
+const RATE_LIMIT_MAX_CONN = 10; // max connections per IP per window
+
+// room → set of connected peers
+const rooms = new Map<string, Set<WebSocket>>();
+const roomLastActive = new Map<string, number>();
+
+// IP → connection timestamps (for rate limiting)
+const connRateMap = new Map<string, number[]>();
+
+
 
 function removePeer(ws: WebSocket, room: string) {
   const peers = rooms.get(room);
@@ -104,7 +110,7 @@ httpServer.on("upgrade", (req, socket, head) => {
 
 wss.on("connection", (ws, req) => {
   const room = new URLSearchParams(req.url?.split("?")[1] ?? "").get("room");
-  if (!room || !/^[A-Fa-f0-9]{6,16}$/.test(room))
+  if (!room || !isValidRoomId(room))
     return void ws.close(1008, "valid room id required");
 
   if (!rooms.has(room) && rooms.size >= MAX_ROOMS)
