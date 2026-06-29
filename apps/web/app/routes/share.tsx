@@ -8,6 +8,11 @@ import {
   CONNECTION_TIMEOUT,
   buildSignalingWsUrl,
 } from "~/lib/webrtc-utils";
+import {
+  generateHexId,
+  getPeerId,
+  unwrapSignalingPayload,
+} from "~/lib/peer-signaling-utils";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Share Camera — IPCam Upkan" }];
@@ -29,7 +34,10 @@ const QUALITY_MAP: Record<Quality, { width: number; height: number }> = {
   "1080": { width: 1920, height: 1080 },
 };
 
-
+type SenderPeerState = {
+  pc: RTCPeerConnection;
+  pendingCandidates: RTCIceCandidateInit[];
+};
 
 export default function Share() {
   const [params, setSearchParams] = useSearchParams();
@@ -38,21 +46,16 @@ export default function Share() {
     .filter(Boolean)
     .join(":");
 
-  function generateRandomRoom() {
-    const randomRoom = Math.random().toString(16).substring(2, 10).toLowerCase();
-    setSearchParams({ room: randomRoom });
-  }
-
   // Auto generate room if missing on HTTPS/cloud
   useEffect(() => {
     if (!room) {
-      const randomRoom = Math.random().toString(16).substring(2, 10).toLowerCase();
-      setSearchParams({ room: randomRoom }, { replace: true });
+      setSearchParams({ room: generateHexId() }, { replace: true });
     }
   }, [room, setSearchParams]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const peerConnectionsRef = useRef<Map<string, SenderPeerState>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -154,6 +157,8 @@ export default function Share() {
     }
     pcRef.current?.close();
     pcRef.current = null;
+    peerConnectionsRef.current.forEach(({ pc }) => pc.close());
+    peerConnectionsRef.current.clear();
     wsRef.current?.close();
     wsRef.current = null;
   }
@@ -262,7 +267,6 @@ export default function Share() {
   function connectSignaling() {
     if (!streamRef.current) return;
     const stream = streamRef.current;
-    const pendingCandidates: RTCIceCandidateInit[] = [];
 
     cleanupConnection();
     setStatus("connecting");
@@ -277,16 +281,20 @@ export default function Share() {
     const ws = new WebSocket(buildWsUrl());
     wsRef.current = ws;
 
-    const createPeerConnection = () => {
-      pcRef.current?.close();
+    const createPeerConnection = (viewerId: string) => {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const state: SenderPeerState = { pc, pendingCandidates: [] };
+      peerConnectionsRef.current.set(viewerId, state);
       pcRef.current = pc;
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
       pc.onicecandidate = (ev) => {
         if (ev.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "candidate", payload: ev.candidate }));
+          ws.send(JSON.stringify({
+            type: "candidate",
+            payload: { targetPeerId: viewerId, candidate: ev.candidate },
+          }));
         }
       };
 
@@ -310,66 +318,66 @@ export default function Share() {
             await sender.setParameters(params).catch(() => {});
           });
         } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-          if (pcRef.current === pc) {
-            pc.close();
-            pcRef.current = null;
-            setStatus("connecting");
-          }
+          pc.close();
+          peerConnectionsRef.current.delete(viewerId);
+          if (pcRef.current === pc) pcRef.current = null;
+          if (!peerConnectionsRef.current.size) setStatus("connecting");
         }
       };
 
-      return pc;
+      return state;
     };
 
-    const addPendingCandidates = async (pc: RTCPeerConnection) => {
-      while (pendingCandidates.length && pc.remoteDescription) {
-        const candidate = pendingCandidates.shift();
-        if (candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    const addPendingCandidates = async (state: SenderPeerState) => {
+      while (state.pendingCandidates.length && state.pc.remoteDescription) {
+        const candidate = state.pendingCandidates.shift();
+        if (candidate) await state.pc.addIceCandidate(new RTCIceCandidate(candidate));
       }
     };
 
-    const getActivePeerConnection = () => {
-      const current = pcRef.current;
-      if (current && current.signalingState !== "closed") return current;
-      return createPeerConnection();
+    const getActivePeerConnection = (viewerId: string) => {
+      const current = peerConnectionsRef.current.get(viewerId);
+      if (current && current.pc.signalingState !== "closed") return current;
+      return createPeerConnection(viewerId);
     };
 
-    const sendOffer = async (iceRestart = false) => {
+    const sendOffer = async (viewerId: string, iceRestart = false) => {
       if (ws.readyState !== WebSocket.OPEN) return;
-      const pc = getActivePeerConnection();
+      const { pc } = getActivePeerConnection(viewerId);
       const offer = await pc.createOffer({ iceRestart });
       await pc.setLocalDescription(offer);
-      ws.send(JSON.stringify({ type: "offer", payload: offer }));
+      ws.send(JSON.stringify({
+        type: "offer",
+        payload: { targetPeerId: viewerId, description: offer },
+      }));
     };
 
-    createPeerConnection();
-
-    ws.onopen = async () => {
-      try {
-        await sendOffer();
-      } catch {
-        cleanupConnection();
-        scheduleReconnect();
-      }
+    ws.onopen = () => {
+      setError("Menunggu viewer bergabung...");
     };
 
     ws.onmessage = async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        const pc = getActivePeerConnection();
+        const payload = msg.payload ?? {};
+        const viewerId = getPeerId(payload);
         if (msg.type === "answer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
-          await addPendingCandidates(pc);
+          const state = getActivePeerConnection(viewerId);
+          const description = unwrapSignalingPayload<RTCSessionDescriptionInit>(payload, "description");
+          await state.pc.setRemoteDescription(new RTCSessionDescription(description));
+          await addPendingCandidates(state);
         } else if (msg.type === "candidate") {
-          if (pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+          const state = getActivePeerConnection(viewerId);
+          const candidate = unwrapSignalingPayload<RTCIceCandidateInit>(payload, "candidate");
+          if (state.pc.remoteDescription) {
+            await state.pc.addIceCandidate(new RTCIceCandidate(candidate));
           } else {
-            pendingCandidates.push(msg.payload);
+            state.pendingCandidates.push(candidate);
           }
-        } else if (msg.type === "peer_joined" || msg.type === "viewer_ready") {
+        } else if (msg.type === "viewer_ready" || (msg.type === "peer_joined" && payload.peerId)) {
           // A viewer is ready. Send a fresh offer from a live peer connection.
           try {
-            await sendOffer(true);
+            await sendOffer(viewerId, true);
           } catch {
             // negotiation failed, fallback to reconnect if broken
           }

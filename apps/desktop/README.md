@@ -40,7 +40,7 @@ Output goes to `apps/desktop/dist/`:
 | | |
 |---|---|
 | Runtime | Electron 31 |
-| Renderer | React 18, Vite (electron-vite) |
+| Renderer | React 19, Vite (electron-vite) |
 | Streaming | WebRTC via renderer |
 | Virtual cam | OS-level (OBS Virtual Camera / v4l2loopback) |
 | Packaging | electron-builder |

@@ -3,7 +3,7 @@ import type { Route } from "./+types/landing";
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "IPCam Upkan — Phone to Webcam, Wirelessly" },
-    { name: "description", content: "Stream your phone camera to any PC via WebRTC. View in desktop app, browser, or OBS. No cloud, no drivers, no cables." },
+    { name: "description", content: "Stream your phone camera to any PC via WebRTC. View in desktop app, browser, or OBS. Cloud or LAN signaling, peer-to-peer media." },
     { property: "og:title", content: "IPCam Upkan — Phone to Webcam, Wirelessly" },
     { property: "og:description", content: "Stream your phone camera to any PC via WebRTC. View in desktop app, browser, or OBS." },
     { property: "og:type", content: "website" },
@@ -70,7 +70,7 @@ export default function Landing() {
             Jadikan <span className="text-[var(--accent)]">HP</span> kamu webcam wireless.
           </h1>
           <p className="font-[var(--body)] text-[15px] text-[var(--text-muted)] m-0">
-            Tanpa cloud, tanpa driver, tanpa kabel.{" "}
+            Cloud/LAN signaling, media peer-to-peer, tanpa kabel.{" "}
             <span className="font-[var(--mono)] text-[12px] text-[var(--text)]">Pure WebRTC.</span>
           </p>
         </div>

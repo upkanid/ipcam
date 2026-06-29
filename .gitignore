@@ -8,4 +8,5 @@ out
 *.tsbuildinfo
 .react-router
 build
+apps/web/server.js
 # package-lock.json is committed for CI reproducibility

@@ -94,6 +94,36 @@ describe("validateSignalingMsg", () => {
     expect(validateSignalingMsg(msg)).toBe(true);
   });
 
+  it("accepts routed viewer_ready messages with peerId", () => {
+    const msg = JSON.stringify({
+      type: "viewer_ready",
+      payload: { peerId: "viewer-a" },
+    });
+    expect(validateSignalingMsg(msg)).toBe(true);
+  });
+
+  it("accepts targeted offers for multi-viewer rooms", () => {
+    const msg = JSON.stringify({
+      type: "offer",
+      payload: {
+        targetPeerId: "viewer-a",
+        description: { type: "offer", sdp: "v=0..." },
+      },
+    });
+    expect(validateSignalingMsg(msg)).toBe(true);
+  });
+
+  it("accepts routed candidates for a specific peer", () => {
+    const msg = JSON.stringify({
+      type: "candidate",
+      payload: {
+        peerId: "viewer-a",
+        candidate: { candidate: "candidate:..." },
+      },
+    });
+    expect(validateSignalingMsg(msg)).toBe(true);
+  });
+
   it("VALID_SIGNAL_TYPES contains exactly offer, answer, candidate, peer_joined, viewer_ready", () => {
     expect(VALID_SIGNAL_TYPES.size).toBe(5);
     expect(VALID_SIGNAL_TYPES.has("offer")).toBe(true);

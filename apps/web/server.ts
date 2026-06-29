@@ -49,6 +49,10 @@ const roomLastActive = new Map<string, number>();
 // IP → connection timestamps (for rate limiting)
 const connRateMap = new Map<string, number[]>();
 
+app.get("/healthz", (_req, res) => {
+  res.json({ ok: true, rooms: rooms.size, clients: wss.clients.size });
+});
+
 
 
 function removePeer(ws: WebSocket, room: string) {

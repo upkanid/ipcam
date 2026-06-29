@@ -34,6 +34,12 @@ function generateRoomId(): string {
     .toUpperCase();
 }
 
+function generatePeerId(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(5)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function getSignalingUrl(
   hostUrl: string,
   roomId: string,
@@ -84,6 +90,7 @@ export default function App() {
   const vcamArmedRef = useRef(false);
 
   const prevStatusRef = useRef<Status>("idle");
+  const peerIdRef = useRef(generatePeerId());
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectCountRef = useRef(0);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -183,6 +190,7 @@ export default function App() {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
     if (prev === status) return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
     if (prev !== "connected" && status === "connected") {
       new Notification("IPCAM UPKAN", { body: "Kamera terhubung" });
     } else if (prev === "connected" && status !== "connected") {
@@ -193,6 +201,9 @@ export default function App() {
   // Auto-connect on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
     startReceiving();
     const onBeforeUnload = () => {
       intentionalStopRef.current = true;
@@ -287,15 +298,12 @@ export default function App() {
       return;
     }
 
-    console.log('[VMic] Setting up audio capture, tracks:', stream.getAudioTracks().length);
-
     const ctx = new AudioContext({ sampleRate: 48000 });
     audioCtxRef.current = ctx;
 
     // Ensure AudioContext is running (can be suspended in some Chromium builds)
     if (ctx.state !== 'running') {
-      console.log('[VMic] AudioContext state:', ctx.state, '— resuming...');
-      ctx.resume().then(() => console.log('[VMic] AudioContext resumed:', ctx.state));
+      ctx.resume().catch(() => {});
     }
 
     const source = ctx.createMediaStreamSource(stream);
@@ -303,18 +311,10 @@ export default function App() {
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     audioProcessorRef.current = processor;
     let pending = new Float32Array(0);
-    let dbgCount = 0;
 
     processor.onaudioprocess = (e) => {
       if (!vmicArmedRef.current) return;
       const input = e.inputBuffer.getChannelData(0);
-
-      // Log first few callbacks + every 100th for debugging
-      if (dbgCount < 5 || dbgCount % 100 === 0) {
-        const maxVal = input.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-        console.log(`[VMic] audio callback #${dbgCount}, samples=${input.length}, peak=${maxVal.toFixed(4)}`);
-      }
-      dbgCount++;
 
       const { chunks, remaining } = flushAudioChunks(pending, input, CHUNK);
       chunks.forEach((buf) => window.api.virtualMic.sendAudio(buf));
@@ -443,7 +443,10 @@ export default function App() {
 
     pc.onicecandidate = (ev) => {
       if (ev.candidate && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "candidate", payload: ev.candidate }));
+        ws.send(JSON.stringify({
+          type: "candidate",
+          payload: { peerId: peerIdRef.current, candidate: ev.candidate },
+        }));
       }
     };
 
@@ -455,23 +458,34 @@ export default function App() {
     };
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "viewer_ready", payload: {} }));
+      ws.send(JSON.stringify({
+        type: "viewer_ready",
+        payload: { peerId: peerIdRef.current },
+      }));
     };
 
     ws.onmessage = async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        const payload = msg.payload ?? {};
         if (msg.type === "offer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+          if (payload.targetPeerId && payload.targetPeerId !== peerIdRef.current) return;
+          const description = payload.description ?? payload;
+          await pc.setRemoteDescription(new RTCSessionDescription(description));
           await addPendingCandidates();
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({ type: "answer", payload: answer }));
+          ws.send(JSON.stringify({
+            type: "answer",
+            payload: { peerId: peerIdRef.current, description: answer },
+          }));
         } else if (msg.type === "candidate") {
+          if (payload.targetPeerId && payload.targetPeerId !== peerIdRef.current) return;
+          const candidate = payload.candidate ?? payload;
           if (pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
           } else {
-            pendingCandidates.push(msg.payload);
+            pendingCandidates.push(candidate);
           }
         }
       } catch {

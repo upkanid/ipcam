@@ -14,14 +14,14 @@ Phone browser  ──── WebRTC offer ────▶  Signaling relay  ◀�
      └─────────────── WebRTC P2P stream (direct) ────────────────────────────────┘
 ```
 
-Signaling is brokered by a tiny relay server — the stream itself travels peer-to-peer, so latency is as low as your network allows.
+Signaling is brokered by a tiny relay server in cloud mode. The camera stream itself travels peer-to-peer through WebRTC when NAT traversal succeeds, so latency is as low as your network allows.
 
 Two relay modes are supported:
 
 | Mode | When to use | How to connect |
 |---|---|---|
-| **Cloud** (default) | Any network, phone and desktop on different Wi-Fi | Share camera from phone directly (auto Room ID) or scan desktop QR → Connect with Room ID on desktop app or browser viewer (`/view`) |
-| **LAN** | Same network, no internet | Desktop shows IP QR → phone opens `/share?ip=…` → direct connection to desktop |
+| **Cloud signaling** (default) | Any network, phone and desktop on different Wi-Fi | Share camera from phone directly (auto Room ID) or scan desktop QR → Connect with Room ID on desktop app or browser viewer (`/view`) |
+| **LAN signaling** | Same network, no internet | Desktop shows IP QR → phone opens `/share?ip=…` → direct connection to desktop |
 
 ---
 

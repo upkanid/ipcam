@@ -10,6 +10,22 @@ let stopSignaling: () => void
 let virtualCam: VirtualCamera
 let virtualMic: VirtualMic
 
+const MAX_FRAME_BYTES = 1280 * 1280 * 4
+const MAX_AUDIO_BYTES = 4800 * 4
+
+function isValidPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1024 && port <= 65535
+}
+
+function canOpenExternal(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
 function createWindow(): BrowserWindow {
   const iconPath = join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
   const win = new BrowserWindow({
@@ -35,7 +51,7 @@ function createWindow(): BrowserWindow {
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    if (canOpenExternal(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
 
@@ -96,6 +112,7 @@ app.whenReady().then(() => {
   ipcMain.handle('get-version', () => app.getVersion())
 
   ipcMain.handle('restart-signaling', (_, port: number) => {
+    if (!isValidPort(port)) throw new Error('Invalid signaling port')
     if (stopSignaling) stopSignaling()
     stopSignaling = createSignalingServer(port)
     return port
@@ -116,6 +133,9 @@ app.whenReady().then(() => {
 
   ipcMain.on('virtualcam:frame', (event, buffer: ArrayBuffer, width: number, height: number) => {
     if (event.sender.isDestroyed()) return
+    if (!Number.isInteger(width) || !Number.isInteger(height)) return
+    if (width <= 0 || height <= 0 || width > 1280 || height > 1280) return
+    if (buffer.byteLength !== width * height * 4 || buffer.byteLength > MAX_FRAME_BYTES) return
     virtualCam.writeFrame(Buffer.from(buffer), width, height)
   })
 
@@ -132,13 +152,9 @@ app.whenReady().then(() => {
 
   ipcMain.on('virtualmic:disarm', () => virtualMic.disarm())
 
-  let vmicAudioCount = 0
   ipcMain.on('virtualmic:audio', (event, buffer: ArrayBuffer) => {
     if (event.sender.isDestroyed()) return
-    if (vmicAudioCount < 5 || vmicAudioCount % 500 === 0) {
-      console.log(`[VMic] IPC audio #${vmicAudioCount}, bytes=${buffer.byteLength}`)
-    }
-    vmicAudioCount++
+    if (buffer.byteLength !== MAX_AUDIO_BYTES) return
     virtualMic.writeAudio(Buffer.from(buffer))
   })
 

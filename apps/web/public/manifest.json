@@ -1,7 +1,7 @@
 {
   "name": "IPCam Upkan",
   "short_name": "IPCam",
-  "description": "Stream your phone camera to any PC via WebRTC. No cloud, no drivers, no cables.",
+  "description": "Stream your phone camera to any PC via WebRTC. Cloud or LAN signaling, peer-to-peer media.",
   "start_url": "/share",
   "display": "standalone",
   "background_color": "#0d0d0d",

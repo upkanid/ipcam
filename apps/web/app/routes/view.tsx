@@ -8,6 +8,11 @@ import {
   CONNECTION_TIMEOUT,
   buildSignalingWsUrl,
 } from "~/lib/webrtc-utils";
+import {
+  generateHexId,
+  shouldHandleTargetedPayload,
+  unwrapSignalingPayload,
+} from "~/lib/peer-signaling-utils";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -21,8 +26,6 @@ export function meta({}: Route.MetaArgs) {
 }
 
 type Status = "idle" | "waiting" | "connected";
-
-
 
 export default function View() {
   const [params, setSearchParams] = useSearchParams();
@@ -49,6 +52,7 @@ export default function View() {
   const intentionalStopRef = useRef(false);
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevFramesRef = useRef(0);
+  const peerIdRef = useRef(generateHexId());
 
   const ip = paramIp;
   const [status, setStatus] = useState<Status>("idle");
@@ -268,7 +272,10 @@ export default function View() {
     // Send ICE candidates
     pc.onicecandidate = (ev) => {
       if (ev.candidate && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "candidate", payload: ev.candidate }));
+        ws.send(JSON.stringify({
+          type: "candidate",
+          payload: { peerId: peerIdRef.current, candidate: ev.candidate },
+        }));
       }
     };
 
@@ -280,26 +287,37 @@ export default function View() {
     };
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "viewer_ready", payload: {} }));
+      ws.send(JSON.stringify({
+        type: "viewer_ready",
+        payload: { peerId: peerIdRef.current },
+      }));
     };
 
     // Handle signaling messages (receiver: wait for offer, send answer)
     ws.onmessage = async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        const payload = msg.payload ?? {};
         if (msg.type === "offer") {
+          if (!shouldHandleTargetedPayload(payload, peerIdRef.current)) return;
+          const description = unwrapSignalingPayload<RTCSessionDescriptionInit>(payload, "description");
           await pc.setRemoteDescription(
-            new RTCSessionDescription(msg.payload),
+            new RTCSessionDescription(description),
           );
           await addPendingCandidates();
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({ type: "answer", payload: answer }));
+          ws.send(JSON.stringify({
+            type: "answer",
+            payload: { peerId: peerIdRef.current, description: answer },
+          }));
         } else if (msg.type === "candidate") {
+          if (!shouldHandleTargetedPayload(payload, peerIdRef.current)) return;
+          const candidate = unwrapSignalingPayload<RTCIceCandidateInit>(payload, "candidate");
           if (pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
           } else {
-            pendingCandidates.push(msg.payload);
+            pendingCandidates.push(candidate);
           }
         }
       } catch {

@@ -1,24 +1,28 @@
-name: CI Web
+name: CI
 
 on:
   push:
     branches: [main, master]
     paths:
       - 'apps/web/**'
+      - 'apps/desktop/**'
       - 'package.json'
       - 'package-lock.json'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'apps/web/**'
+      - 'apps/desktop/**'
       - 'package.json'
       - 'package-lock.json'
+      - '.github/workflows/**'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  typecheck:
-    name: Type Check
+  verify:
+    name: Test, Type Check, Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,19 +34,6 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run typecheck -w apps/web
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      - run: npm run build:web
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build

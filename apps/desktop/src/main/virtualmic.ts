@@ -122,7 +122,6 @@ function findVirtualAudioDevice(py: string): VDeviceResult | null {
 
     const out = res.stdout.toString()
     const lines = out.split('\n').map(l => l.trim()).filter(Boolean)
-    console.log('[VMic] Available output devices:', lines)
 
     const keywords = ['blackhole', 'vb-cable', 'cable input', 'virtual cable', 'pipewire', 'cable']
     for (const line of lines) {
@@ -133,12 +132,9 @@ function findVirtualAudioDevice(py: string): VDeviceResult | null {
       const lowerName = name.toLowerCase()
       if (lowerName.includes('speaker')) continue // Skip speaker emulation devices which fail on Windows
       if (keywords.some(k => lowerName.includes(k))) {
-        console.log(`[VMic] Found virtual device: "${name}" at index ${idx}`)
         return { name, index: idx }
       }
     }
-
-    console.log('[VMic] No virtual audio device matched keywords:', keywords)
   } catch (err) {
     console.error('[VMic] Error querying devices:', err)
   }
@@ -266,9 +262,6 @@ export class VirtualMic {
 
   writeAudio(data: Buffer): void {
     if (!this.armed || !this.proc) return
-    if (this.writeCount < 3) {
-      console.log(`[VMic] writeAudio #${this.writeCount}, bytes=${data.length}, stdinWritable=${this.proc.stdin?.writable}`)
-    }
     this.writeCount++
     this.proc.stdin?.write(data)
   }
@@ -288,7 +281,6 @@ export class VirtualMic {
     }
 
     const deviceArg = this.info.deviceIndex ?? this.info.device!
-    console.log(`[VMic] Starting python helper: device="${this.info.device}" index=${this.info.deviceIndex}`)
 
     this.proc = spawn(py, [
       this.helperPath,
@@ -302,10 +294,11 @@ export class VirtualMic {
 
     this.proc.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
-      console.log('[VMic] python stderr:', text.trim())
       if (!ready && text.includes('VMIC_READY')) {
         ready = true
         this.statusCb?.('active')
+      } else if (!text.includes('VMIC_DEVICE:')) {
+        console.error('[VMic] python stderr:', text.trim())
       }
     })
 
