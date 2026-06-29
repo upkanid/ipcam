@@ -75,14 +75,37 @@ export default function Landing() {
           </p>
         </div>
 
-        {/* ── Three panels: Share / View / Desktop ── */}
+        {/* ── Three panels: View / Share / Desktop ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 border border-[var(--border)]">
-          {/* Panel: HP (Share) */}
+          {/* Panel: Web Viewer */}
           <div
             className="p-10 [animation:fade-up_0.7s_0.1s_ease_both] opacity-0 max-sm:p-8"
           >
             <span className="block font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] mb-4">
-              01 / KIRIM DARI HP
+              01 / SIAPKAN RECEIVER
+            </span>
+            <div className="text-4xl mb-5" aria-hidden>🌐</div>
+            <h2 className="font-[var(--display)] text-[clamp(24px,3vw,36px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
+              Start<br />
+              <span className="text-[var(--accent)]">viewer dulu</span>
+            </h2>
+            <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.65] mb-8">
+              Buka viewer di PC, desktop app, atau OBS Browser Source sampai statusnya waiting.
+            </p>
+            <a
+              href="/view"
+              className="inline-flex items-center gap-2.5 bg-[var(--accent)] text-black font-[var(--mono)] text-[13px] font-bold tracking-[0.12em] uppercase no-underline px-7 py-3.5 transition-all duration-200 hover:bg-[#00ff88] hover:shadow-[0_0_30px_var(--accent-glow)]"
+            >
+              → Open Viewer
+            </a>
+          </div>
+
+          {/* Panel: HP (Share) */}
+          <div
+            className="p-10 [animation:fade-up_0.7s_0.15s_ease_both] opacity-0 border-l border-[var(--border)] max-sm:border-l-0 max-sm:border-t max-sm:p-8"
+          >
+            <span className="block font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] mb-4">
+              02 / KIRIM DARI HP
             </span>
             <div className="text-4xl mb-5" aria-hidden>📱</div>
             <h2 className="font-[var(--display)] text-[clamp(24px,3vw,36px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
@@ -90,36 +113,13 @@ export default function Landing() {
               <span className="text-[var(--accent)]">kamera HP</span>
             </h2>
             <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.65] mb-8">
-              Buka halaman share dari HP, tap tombol, dan kamera langsung streaming ke viewer manapun.
+              Setelah receiver waiting, scan QR atau buka link share dari HP lalu tap Start Sharing.
             </p>
             <a
               href="/share"
-              className="inline-flex items-center gap-2.5 bg-[var(--accent)] text-black font-[var(--mono)] text-[13px] font-bold tracking-[0.12em] uppercase no-underline px-7 py-3.5 transition-all duration-200 hover:bg-[#00ff88] hover:shadow-[0_0_30px_var(--accent-glow)]"
-            >
-              → Start Sharing
-            </a>
-          </div>
-
-          {/* Panel: Web Viewer */}
-          <div
-            className="p-10 [animation:fade-up_0.7s_0.15s_ease_both] opacity-0 border-l border-[var(--border)] max-sm:border-l-0 max-sm:border-t max-sm:p-8"
-          >
-            <span className="block font-[var(--mono)] text-[10px] text-[var(--text-muted)] tracking-[0.2em] mb-4">
-              02 / TERIMA DI BROWSER
-            </span>
-            <div className="text-4xl mb-5" aria-hidden>🌐</div>
-            <h2 className="font-[var(--display)] text-[clamp(24px,3vw,36px)] font-black uppercase text-[var(--text)] mb-3 leading-none">
-              View di<br />
-              <span className="text-[var(--accent)]">browser</span>
-            </h2>
-            <p className="font-[var(--body)] text-[14px] text-[var(--text-muted)] leading-[1.65] mb-8">
-              Tanpa install apapun — buka langsung di browser PC. Juga bisa dipakai sebagai OBS Browser Source.
-            </p>
-            <a
-              href="/view"
               className="inline-flex items-center gap-2.5 bg-transparent text-[var(--text)] font-[var(--mono)] text-[13px] font-bold tracking-[0.12em] uppercase no-underline px-7 py-3.5 border border-[var(--border-bright)] transition-all duration-200 hover:border-[var(--accent)] hover:text-[var(--accent)]"
             >
-              → Open Viewer
+              → Start Sharing
             </a>
           </div>
 
@@ -160,10 +160,10 @@ export default function Landing() {
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
         >
           {[
-            { n: "01", label: "HP", text: "Scan QR atau buka /share di HP" },
-            { n: "02", label: "PC", text: "Buka /view di browser PC — masukkan Room ID yang sama" },
-            { n: "03", label: "HP", text: "Tap Start Sharing — stream langsung muncul di browser PC" },
-            { n: "04", label: "PC", text: "Fullscreen, unmute audio, atau pakai sebagai OBS source" },
+            { n: "01", label: "PC", text: "Buka /view di browser PC, desktop app, atau OBS source" },
+            { n: "02", label: "PC", text: "Masukkan Room ID atau pakai link viewer sampai status waiting" },
+            { n: "03", label: "HP", text: "Scan QR atau buka /share dengan Room ID yang sama" },
+            { n: "04", label: "HP", text: "Tap Start Sharing — stream langsung muncul di receiver" },
           ].map(({ n, label, text }) => (
             <div
               key={n}

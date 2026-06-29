@@ -3,7 +3,13 @@
  * Extracted for reuse between server.ts and tests.
  */
 
-export const VALID_SIGNAL_TYPES = new Set(["offer", "answer", "candidate", "peer_joined"]);
+export const VALID_SIGNAL_TYPES = new Set([
+  "offer",
+  "answer",
+  "candidate",
+  "peer_joined",
+  "viewer_ready",
+]);
 export const MAX_MSG_SIZE = 16_384; // 16 KB
 
 export function validateSignalingMsg(raw: string): boolean {

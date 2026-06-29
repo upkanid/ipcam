@@ -405,6 +405,7 @@ export default function App() {
   function connectToSignaling() {
     cleanupConnection();
     setStatus("waiting");
+    const pendingCandidates: RTCIceCandidateInit[] = [];
 
     connectionTimeoutRef.current = setTimeout(() => {
       connectionTimeoutRef.current = null;
@@ -446,16 +447,32 @@ export default function App() {
       }
     };
 
+    const addPendingCandidates = async () => {
+      while (pendingCandidates.length && pc.remoteDescription) {
+        const candidate = pendingCandidates.shift();
+        if (candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    };
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "viewer_ready", payload: {} }));
+    };
+
     ws.onmessage = async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === "offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+          await addPendingCandidates();
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           ws.send(JSON.stringify({ type: "answer", payload: answer }));
         } else if (msg.type === "candidate") {
-          await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+          if (pc.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+          } else {
+            pendingCandidates.push(msg.payload);
+          }
         }
       } catch {
         // Ignore malformed signaling messages

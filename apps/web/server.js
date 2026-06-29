@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 const app = express();
 const httpServer = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
-const VALID_SIGNAL_TYPES = /* @__PURE__ */ new Set(["offer", "answer", "candidate", "peer_joined"]);
+const VALID_SIGNAL_TYPES = /* @__PURE__ */ new Set(["offer", "answer", "candidate", "peer_joined", "viewer_ready"]);
 const MAX_MSG_SIZE = 16384;
 function validateSignalingMsg(raw) {
   if (raw.length > MAX_MSG_SIZE) return false;

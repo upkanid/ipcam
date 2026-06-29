@@ -262,6 +262,7 @@ export default function Share() {
   function connectSignaling() {
     if (!streamRef.current) return;
     const stream = streamRef.current;
+    const pendingCandidates: RTCIceCandidateInit[] = [];
 
     cleanupConnection();
     setStatus("connecting");
@@ -276,50 +277,76 @@ export default function Share() {
     const ws = new WebSocket(buildWsUrl());
     wsRef.current = ws;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    pcRef.current = pc;
+    const createPeerConnection = () => {
+      pcRef.current?.close();
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      pcRef.current = pc;
 
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-    pc.onicecandidate = (ev) => {
-      if (ev.candidate && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "candidate", payload: ev.candidate }));
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") {
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current);
-          connectionTimeoutRef.current = null;
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "candidate", payload: ev.candidate }));
         }
-        reconnectCountRef.current = 0;
-        setReconnecting(false);
-        setError("");
-        setStatus("streaming");
-        // Cap video bitrate to avoid unnecessary CPU/heat
-        const maxKbps = media.quality === "1080" ? 4000 : media.quality === "720" ? 2000 : 800;
-        pc.getSenders().forEach(async (sender) => {
-          if (sender.track?.kind !== "video") return;
-          const params = sender.getParameters();
-          if (!params.encodings?.length) params.encodings = [{}];
-          params.encodings[0].maxBitrate = maxKbps * 1000;
-          await sender.setParameters(params).catch(() => {});
-        });
-      } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        // Peer disconnected. Just close this RTCPeerConnection. 
-        // DO NOT kill WebSocket or start reconnect loop. Keep WS open for new/returning viewers.
-        pcRef.current?.close();
-        pcRef.current = null;
-        setStatus("connecting");
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
+          }
+          reconnectCountRef.current = 0;
+          setReconnecting(false);
+          setError("");
+          setStatus("streaming");
+          // Cap video bitrate to avoid unnecessary CPU/heat
+          const maxKbps = media.quality === "1080" ? 4000 : media.quality === "720" ? 2000 : 800;
+          pc.getSenders().forEach(async (sender) => {
+            if (sender.track?.kind !== "video") return;
+            const params = sender.getParameters();
+            if (!params.encodings?.length) params.encodings = [{}];
+            params.encodings[0].maxBitrate = maxKbps * 1000;
+            await sender.setParameters(params).catch(() => {});
+          });
+        } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          if (pcRef.current === pc) {
+            pc.close();
+            pcRef.current = null;
+            setStatus("connecting");
+          }
+        }
+      };
+
+      return pc;
+    };
+
+    const addPendingCandidates = async (pc: RTCPeerConnection) => {
+      while (pendingCandidates.length && pc.remoteDescription) {
+        const candidate = pendingCandidates.shift();
+        if (candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
       }
     };
+
+    const getActivePeerConnection = () => {
+      const current = pcRef.current;
+      if (current && current.signalingState !== "closed") return current;
+      return createPeerConnection();
+    };
+
+    const sendOffer = async (iceRestart = false) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const pc = getActivePeerConnection();
+      const offer = await pc.createOffer({ iceRestart });
+      await pc.setLocalDescription(offer);
+      ws.send(JSON.stringify({ type: "offer", payload: offer }));
+    };
+
+    createPeerConnection();
 
     ws.onopen = async () => {
       try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        ws.send(JSON.stringify({ type: "offer", payload: offer }));
+        await sendOffer();
       } catch {
         cleanupConnection();
         scheduleReconnect();
@@ -329,16 +356,20 @@ export default function Share() {
     ws.onmessage = async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        const pc = getActivePeerConnection();
         if (msg.type === "answer") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+          await addPendingCandidates(pc);
         } else if (msg.type === "candidate") {
-          await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
-        } else if (msg.type === "peer_joined") {
-          // A new viewer has joined! Send a new offer immediately.
+          if (pc.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+          } else {
+            pendingCandidates.push(msg.payload);
+          }
+        } else if (msg.type === "peer_joined" || msg.type === "viewer_ready") {
+          // A viewer is ready. Send a fresh offer from a live peer connection.
           try {
-            const offer = await pc.createOffer({ iceRestart: true });
-            await pc.setLocalDescription(offer);
-            ws.send(JSON.stringify({ type: "offer", payload: offer }));
+            await sendOffer(true);
           } catch {
             // negotiation failed, fallback to reconnect if broken
           }
