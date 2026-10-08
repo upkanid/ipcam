@@ -81,11 +81,34 @@ function isCloudMode(hostUrl: string): boolean {
   }
 }
 
+let cachedTurn: { key: string; servers: RTCIceServer[]; expiresAt: number } | null = null;
+
+async function getIceServers(hostUrl: string, roomId: string): Promise<RTCIceServer[]> {
+  if (!isCloudMode(hostUrl)) return ICE_SERVERS;
+  const origin = new URL(hostUrl).origin;
+  const key = `${origin}:${roomId}`;
+  if (cachedTurn?.key === key && cachedTurn.expiresAt > Date.now()) return cachedTurn.servers;
+  try {
+    const response = await fetch(`${origin}/ice-servers?room=${encodeURIComponent(roomId)}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return ICE_SERVERS;
+    const data = await response.json() as { iceServers?: RTCIceServer[] };
+    if (!Array.isArray(data.iceServers) || !data.iceServers.some(
+      (server) => server.username && server.credential && server.urls,
+    )) return ICE_SERVERS;
+    const servers = [...ICE_SERVERS, ...data.iceServers];
+    cachedTurn = { key, servers, expiresAt: Date.now() + 60 * 60_000 };
+    return servers;
+  } catch {
+    return ICE_SERVERS;
+  }
+}
+
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const rafRef = useRef(0);
   const lastFrameRef = useRef(0);
   const vcamArmedRef = useRef(false);
 
@@ -95,6 +118,7 @@ export default function App() {
   const reconnectCountRef = useRef(0);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intentionalStopRef = useRef(false);
+  const connectionAttemptRef = useRef(0);
 
   const [localIP, setLocalIP] = useState("—");
   const [status, setStatus] = useState<Status>("idle");
@@ -310,7 +334,7 @@ export default function App() {
     const CHUNK = 4800; // must match virtualmic.ts chunkSamples
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     audioProcessorRef.current = processor;
-    let pending = new Float32Array(0);
+    let pending: Float32Array = new Float32Array(0);
 
     processor.onaudioprocess = (e) => {
       if (!vmicArmedRef.current) return;
@@ -362,6 +386,7 @@ export default function App() {
   }
 
   function cleanupConnection() {
+    connectionAttemptRef.current += 1;
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
@@ -402,21 +427,18 @@ export default function App() {
     connectToSignaling();
   }
 
-  function connectToSignaling() {
+  async function connectToSignaling() {
     cleanupConnection();
     setStatus("waiting");
+    const attempt = connectionAttemptRef.current;
+    const iceServers = await getIceServers(hostUrl, roomId);
+    if (attempt !== connectionAttemptRef.current || intentionalStopRef.current) return;
     const pendingCandidates: RTCIceCandidateInit[] = [];
-
-    connectionTimeoutRef.current = setTimeout(() => {
-      connectionTimeoutRef.current = null;
-      cleanupConnection();
-      scheduleReconnect();
-    }, CONNECTION_TIMEOUT);
 
     const ws = new WebSocket(getSignalingUrl(hostUrl, roomId, port));
     wsRef.current = ws;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
 
     pc.ontrack = (ev) => {
@@ -426,6 +448,7 @@ export default function App() {
     };
 
     pc.onconnectionstatechange = () => {
+      if (pcRef.current !== pc) return;
       if (pc.connectionState === "connected") {
         if (connectionTimeoutRef.current) {
           clearTimeout(connectionTimeoutRef.current);
@@ -471,6 +494,12 @@ export default function App() {
         if (msg.type === "offer") {
           if (payload.targetPeerId && payload.targetPeerId !== peerIdRef.current) return;
           const description = payload.description ?? payload;
+          if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = setTimeout(() => {
+            connectionTimeoutRef.current = null;
+            cleanupConnection();
+            scheduleReconnect();
+          }, CONNECTION_TIMEOUT);
           await pc.setRemoteDescription(new RTCSessionDescription(description));
           await addPendingCandidates();
           const answer = await pc.createAnswer();
@@ -487,6 +516,11 @@ export default function App() {
           } else {
             pendingCandidates.push(candidate);
           }
+        } else if (msg.type === "peer_joined") {
+          ws.send(JSON.stringify({
+            type: "viewer_ready",
+            payload: { peerId: peerIdRef.current },
+          }));
         }
       } catch {
         // Ignore malformed signaling messages
@@ -494,12 +528,14 @@ export default function App() {
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
       cleanupConnection();
       scheduleReconnect();
     };
 
-    ws.onclose = (ev) => {
-      if (!ev.wasClean && !intentionalStopRef.current) {
+    ws.onclose = () => {
+      if (wsRef.current !== ws) return;
+      if (!intentionalStopRef.current) {
         cleanupConnection();
         scheduleReconnect();
       }

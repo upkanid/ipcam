@@ -1,12 +1,39 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   buildSignalingWsUrl,
+  getIceServers,
   ICE_SERVERS,
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_BASE_DELAY,
   CONNECTION_TIMEOUT,
   DEFAULT_SIGNALING_PORT,
 } from "../app/lib/webrtc-utils";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("getIceServers", () => {
+  it("uses local STUN without a cloud room", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await getIceServers(null, "https://ipcam.upkan.id")).toBe(ICE_SERVERS);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("adds temporary TURN credentials and reuses them for the same room", async () => {
+    const turn = { urls: "turns:turn.cloudflare.com:443?transport=tcp", username: "u", credential: "p" };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ iceServers: [turn] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const first = await getIceServers("A1B2C3D4", "https://ipcam.upkan.id");
+    expect(first).toEqual([...ICE_SERVERS, turn]);
+    expect(await getIceServers("A1B2C3D4", "https://ipcam.upkan.id")).toBe(first);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to STUN when TURN is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    expect(await getIceServers("F0E1D2C3", "https://ipcam.upkan.id")).toBe(ICE_SERVERS);
+  });
+});
 
 describe("buildSignalingWsUrl", () => {
   describe("cloud mode (room param)", () => {

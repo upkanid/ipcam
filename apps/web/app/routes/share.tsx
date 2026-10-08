@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { Route } from "./+types/share";
 import {
-  ICE_SERVERS,
+  getIceServers,
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_BASE_DELAY,
   CONNECTION_TIMEOUT,
@@ -46,12 +46,12 @@ export default function Share() {
     .filter(Boolean)
     .join(":");
 
-  // Auto generate room if missing on HTTPS/cloud
+  // A LAN link carries ip/port and must keep those parameters intact.
   useEffect(() => {
-    if (!room) {
+    if (!room && !defaultIp) {
       setSearchParams({ room: generateHexId() }, { replace: true });
     }
-  }, [room, setSearchParams]);
+  }, [room, defaultIp, setSearchParams]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -63,6 +63,7 @@ export default function Share() {
   const reconnectCountRef = useRef(0);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intentionalStopRef = useRef(false);
+  const connectionAttemptRef = useRef(0);
 
   const [ip, setIp] = useState(defaultIp);
   const [status, setStatus] = useState<Status>("idle");
@@ -147,6 +148,7 @@ export default function Share() {
   }, []);
 
   function cleanupConnection() {
+    connectionAttemptRef.current += 1;
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
@@ -225,6 +227,10 @@ export default function Share() {
   async function startSharing() {
     if (!room && !ip.trim()) return;
     if (!media.audio && !media.video) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Kamera memerlukan halaman HTTPS. Buka link /share dari situs HTTPS.");
+      return;
+    }
     setError("");
     setStatus("connecting");
     intentionalStopRef.current = false;
@@ -264,25 +270,21 @@ export default function Share() {
     connectSignaling();
   }
 
-  function connectSignaling() {
+  async function connectSignaling() {
     if (!streamRef.current) return;
     const stream = streamRef.current;
 
     cleanupConnection();
     setStatus("connecting");
-
-    // Connection timeout
-    connectionTimeoutRef.current = setTimeout(() => {
-      connectionTimeoutRef.current = null;
-      cleanupConnection();
-      scheduleReconnect();
-    }, CONNECTION_TIMEOUT);
+    const attempt = connectionAttemptRef.current;
+    const iceServers = await getIceServers(room, window.location.origin);
+    if (attempt !== connectionAttemptRef.current || intentionalStopRef.current || !streamRef.current) return;
 
     const ws = new WebSocket(buildWsUrl());
     wsRef.current = ws;
 
     const createPeerConnection = (viewerId: string) => {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers });
       const state: SenderPeerState = { pc, pendingCandidates: [] };
       peerConnectionsRef.current.set(viewerId, state);
       pcRef.current = pc;
@@ -350,6 +352,14 @@ export default function Share() {
         type: "offer",
         payload: { targetPeerId: viewerId, description: offer },
       }));
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+      if (![...peerConnectionsRef.current.values()].some(({ pc }) => pc.connectionState === "connected")) {
+        connectionTimeoutRef.current = setTimeout(() => {
+          connectionTimeoutRef.current = null;
+          cleanupConnection();
+          scheduleReconnect();
+        }, CONNECTION_TIMEOUT);
+      }
     };
 
     ws.onopen = () => {
@@ -388,12 +398,14 @@ export default function Share() {
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
       cleanupConnection();
       scheduleReconnect();
     };
 
-    ws.onclose = (ev) => {
-      if (!ev.wasClean && !intentionalStopRef.current) {
+    ws.onclose = () => {
+      if (wsRef.current !== ws) return;
+      if (!intentionalStopRef.current) {
         cleanupConnection();
         scheduleReconnect();
       }
@@ -579,20 +591,20 @@ export default function Share() {
         {status === "idle" ? (
           <button
             onClick={startSharing}
-            disabled={!room || (!media.audio && !media.video)}
+            disabled={!(room || ip.trim()) || (!media.audio && !media.video)}
             className="share-action-btn"
             style={{
               ...s.actionBtn,
               background:
-                room && (media.audio || media.video)
+                (room || ip.trim()) && (media.audio || media.video)
                   ? "var(--accent)"
                   : "var(--surface)",
               color:
-                room && (media.audio || media.video)
+                (room || ip.trim()) && (media.audio || media.video)
                   ? "#000"
                   : "var(--text-muted)",
               cursor:
-                room && (media.audio || media.video)
+                (room || ip.trim()) && (media.audio || media.video)
                   ? "pointer"
                   : "not-allowed",
             }}

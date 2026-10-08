@@ -15,6 +15,12 @@ export function createSignalingServer(port: number): () => void {
   wss.on('connection', (ws) => {
     peers.add(ws)
 
+    peers.forEach((peer) => {
+      if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+        peer.send(JSON.stringify({ type: 'peer_joined', payload: {} }))
+      }
+    })
+
     ws.on('message', (data) => {
       let msg: SignalingMessage
       try { msg = JSON.parse(data.toString()) } catch { return }

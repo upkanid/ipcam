@@ -4,6 +4,18 @@
   "main": "./workers/app.ts",
   "compatibility_date": "2026-10-08",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": false,
+  "workers_dev": true,
+  "preview_urls": true,
+  "secrets": {
+    "required": ["TURN_KEY_ID", "TURN_KEY_API_TOKEN"]
+  },
+  "routes": [
+    {
+      "pattern": "ipcam.upkan.id",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true
   },

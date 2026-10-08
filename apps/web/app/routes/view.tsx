@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { Route } from "./+types/view";
 import {
-  ICE_SERVERS,
+  getIceServers,
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_BASE_DELAY,
   CONNECTION_TIMEOUT,
@@ -50,6 +50,7 @@ export default function View() {
     null,
   );
   const intentionalStopRef = useRef(false);
+  const connectionAttemptRef = useRef(0);
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevFramesRef = useRef(0);
   const peerIdRef = useRef(generateHexId());
@@ -81,7 +82,7 @@ export default function View() {
       stopStatsPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasParams]);
+  }, [room, ip]);
 
   // ── Sync muted/volume to video element ─────────────────
   useEffect(() => {
@@ -141,6 +142,7 @@ export default function View() {
   }
 
   function cleanupConnection() {
+    connectionAttemptRef.current += 1;
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
@@ -196,22 +198,18 @@ export default function View() {
     connectSignaling();
   }
 
-  function connectSignaling() {
+  async function connectSignaling() {
     cleanupConnection();
     setStatus("waiting");
+    const attempt = connectionAttemptRef.current;
+    const iceServers = await getIceServers(room, window.location.origin);
+    if (attempt !== connectionAttemptRef.current || intentionalStopRef.current) return;
     const pendingCandidates: RTCIceCandidateInit[] = [];
-
-    // Connection timeout
-    connectionTimeoutRef.current = setTimeout(() => {
-      connectionTimeoutRef.current = null;
-      cleanupConnection();
-      scheduleReconnect();
-    }, CONNECTION_TIMEOUT);
 
     const ws = new WebSocket(buildWsUrl());
     wsRef.current = ws;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
 
     // When we get a track (video/audio from sender), attach to video element
@@ -249,6 +247,7 @@ export default function View() {
 
     // Handle connection state
     pc.onconnectionstatechange = () => {
+      if (pcRef.current !== pc) return;
       if (pc.connectionState === "connected") {
         if (connectionTimeoutRef.current) {
           clearTimeout(connectionTimeoutRef.current);
@@ -301,6 +300,12 @@ export default function View() {
         if (msg.type === "offer") {
           if (!shouldHandleTargetedPayload(payload, peerIdRef.current)) return;
           const description = unwrapSignalingPayload<RTCSessionDescriptionInit>(payload, "description");
+          if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = setTimeout(() => {
+            connectionTimeoutRef.current = null;
+            cleanupConnection();
+            scheduleReconnect();
+          }, CONNECTION_TIMEOUT);
           await pc.setRemoteDescription(
             new RTCSessionDescription(description),
           );
@@ -319,6 +324,11 @@ export default function View() {
           } else {
             pendingCandidates.push(candidate);
           }
+        } else if (msg.type === "peer_joined") {
+          ws.send(JSON.stringify({
+            type: "viewer_ready",
+            payload: { peerId: peerIdRef.current },
+          }));
         }
       } catch {
         // Ignore malformed signaling messages
@@ -326,12 +336,14 @@ export default function View() {
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
       cleanupConnection();
       scheduleReconnect();
     };
 
-    ws.onclose = (ev) => {
-      if (!ev.wasClean && !intentionalStopRef.current) {
+    ws.onclose = () => {
+      if (wsRef.current !== ws) return;
+      if (!intentionalStopRef.current) {
         cleanupConnection();
         scheduleReconnect();
       }

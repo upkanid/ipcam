@@ -46,13 +46,13 @@ export class SignalingRoom extends DurableObject {
       WebSocket,
     ];
 
+    this.ctx.acceptWebSocket(server);
     for (const peer of peers) {
       if (peer.readyState === WebSocket.OPEN) {
         peer.send(JSON.stringify({ type: "peer_joined", payload: {} }));
       }
     }
 
-    this.ctx.acceptWebSocket(server);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL);
     return new Response(null, { status: 101, webSocket: client });
   }

@@ -14,14 +14,16 @@ Phone browser  ──── WebRTC offer ────▶  Signaling relay  ◀�
      └─────────────── WebRTC P2P stream (direct) ────────────────────────────────┘
 ```
 
-Signaling is brokered by a tiny relay server in cloud mode. The camera stream itself travels peer-to-peer through WebRTC when NAT traversal succeeds, so latency is as low as your network allows.
+Signaling is brokered by a tiny relay server in cloud mode. The camera stream itself travels peer-to-peer through WebRTC when NAT traversal succeeds. With TURN configured, media can use TURN when a direct path is blocked.
 
 Two relay modes are supported:
 
 | Mode | When to use | How to connect |
 |---|---|---|
 | **Cloud signaling** (default) | Any network, phone and desktop on different Wi-Fi | Share camera from phone directly (auto Room ID) or scan desktop QR → Connect with Room ID on desktop app or browser viewer (`/view`) |
-| **LAN signaling** | Same network, no internet | Desktop shows IP QR → phone opens `/share?ip=…` → direct connection to desktop |
+| **LAN signaling** | Same network with a secure camera page | Desktop shows IP QR → phone opens `/share?ip=…` → direct connection to desktop |
+
+Phone browsers require a secure context for camera access. A plain `http://<LAN-IP>` share page generally cannot open the camera; use the HTTPS cloud page for normal phone use.
 
 ---
 
@@ -82,6 +84,18 @@ The web app runs on Cloudflare Workers. WebSocket signaling is coordinated by a
 Durable Object per room, so the relay remains consistent when requests are
 handled by different Worker instances. Configure `ipcam.upkan.id` as the
 Worker's custom domain in Cloudflare after the first deploy.
+
+### TURN fallback for restrictive networks
+
+Create a Cloudflare Realtime TURN key, then store its key ID and API token as Worker secrets:
+
+```bash
+cd apps/web
+npx wrangler secret put TURN_KEY_ID
+npx wrangler secret put TURN_KEY_API_TOKEN
+```
+
+Deploy the web Worker after setting the secrets. It generates temporary TURN credentials for each client; the long-lived API token stays on the Worker. Both the phone and web viewer load these credentials automatically. The desktop viewer does so in cloud mode. If TURN is unconfigured or temporarily unavailable, clients continue with STUN, which may fail on restrictive networks. TURN relay traffic can incur provider charges.
 
 ---
 

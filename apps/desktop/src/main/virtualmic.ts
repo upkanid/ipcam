@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, execSync, spawnSync } from 'child_process'
+import { spawn, ChildProcess, spawnSync } from 'child_process'
 import { platform, tmpdir } from 'os'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
