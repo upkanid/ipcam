@@ -34,6 +34,7 @@ export default function View() {
     .filter(Boolean)
     .join(":");
   const obs = params.get("obs") === "1";
+  const popout = params.get("popout") === "1";
 
   const noRoomOnHttps =
     !room &&
@@ -42,6 +43,8 @@ export default function View() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoWrapRef = useRef<HTMLDivElement>(null);
+  const popoutWindowRef = useRef<Window | null>(null);
+  const popoutCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,7 +66,9 @@ export default function View() {
   const [volume, setVolume] = useState(0.8);
   const [fps, setFps] = useState(0);
   const [resolution, setResolution] = useState("");
+  const [videoRatio, setVideoRatio] = useState(16 / 9);
   const [target, setTarget] = useState(room || paramIp || "");
+  const [popoutOpen, setPopoutOpen] = useState(false);
   const [trackState, setTrackState] = useState<{
     audio: boolean;
     video: boolean;
@@ -83,6 +88,10 @@ export default function View() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, ip]);
+
+  useEffect(() => () => {
+    if (popoutCheckRef.current) clearInterval(popoutCheckRef.current);
+  }, []);
 
   // ── Sync muted/volume to video element ─────────────────
   useEffect(() => {
@@ -133,6 +142,9 @@ export default function View() {
     const v = videoRef.current;
     if (v) {
       setResolution(`${v.videoWidth}×${v.videoHeight}`);
+      if (v.videoWidth > 0 && v.videoHeight > 0) {
+        setVideoRatio(v.videoWidth / v.videoHeight);
+      }
     }
   }
 
@@ -362,6 +374,33 @@ export default function View() {
     setTrackState({ audio: false, video: false });
   }
 
+  function openPopout() {
+    if (popoutWindowRef.current && !popoutWindowRef.current.closed) {
+      popoutWindowRef.current.focus();
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("popout", "1");
+    const popup = window.open(url.toString(), "ipcam-view-popout", "popup=yes,width=800,height=520,resizable=yes");
+    if (!popup) {
+      setError("Pop out diblokir browser. Izinkan pop up untuk situs ini lalu coba lagi.");
+      return;
+    }
+
+    popoutWindowRef.current = popup;
+    stopViewing();
+    setPopoutOpen(true);
+    popoutCheckRef.current = setInterval(() => {
+      if (!popup.closed) return;
+      if (popoutCheckRef.current) clearInterval(popoutCheckRef.current);
+      popoutCheckRef.current = null;
+      popoutWindowRef.current = null;
+      setPopoutOpen(false);
+      startViewing();
+    }, 500);
+  }
+
   // ── Fullscreen ─────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
     const el = videoWrapRef.current;
@@ -401,18 +440,23 @@ export default function View() {
 
   // ── Normal Mode ────────────────────────────────────────
   return (
-    <div style={s.root}>
+    <div style={{ ...s.root, ...(popout ? s.popoutRoot : {}) }}>
       {/* ── Header ─────────────────────────────────────── */}
-      <header style={s.header}>
-        <a href="/" style={s.back}>
-          ← BACK
-        </a>
+      {!popout && <header style={s.header}>
+        <a href="/" style={s.back}>← BACK</a>
         <span style={s.logo}>IPCAM_UPKAN</span>
         <StatusBadge status={status} reconnecting={reconnecting} />
-      </header>
+      </header>}
 
       {/* ── Video Area ─────────────────────────────────── */}
-      <div ref={videoWrapRef} style={s.previewWrap}>
+      <div ref={videoWrapRef} className="viewer-preview-wrap" style={{
+        ...s.previewWrap,
+        ...(popout ? s.popoutPreviewWrap : {}),
+        ...(popout ? {} : {
+          width: `min(calc(100% - 40px), 960px, calc((100dvh - 150px) * ${videoRatio}))`,
+          aspectRatio: String(videoRatio),
+        }),
+      }}>
         <video
           ref={videoRef}
           autoPlay
@@ -430,7 +474,7 @@ export default function View() {
           <div style={s.previewIdle}>
             <MonitorIcon />
             <span style={s.previewIdleText}>
-              {noRoomOnHttps ? "ENTER ROOM ID" : "NO STREAM"}
+              {popoutOpen ? "STREAM IN POP OUT WINDOW" : noRoomOnHttps ? "ENTER ROOM ID" : "NO STREAM"}
             </span>
           </div>
         )}
@@ -463,8 +507,15 @@ export default function View() {
 
       {/* ── Controls ───────────────────────────────────── */}
       <div style={s.controls}>
+        {popoutOpen && (
+          <div style={s.popoutControls}>
+            <span style={s.stat}>STREAM OPEN IN A SEPARATE WINDOW</span>
+            <button onClick={() => popoutWindowRef.current?.focus()} style={s.controlBtn} title="Focus pop out window">⇱</button>
+            <button onClick={() => popoutWindowRef.current?.close()} style={s.controlBtn} title="Return stream here">↩</button>
+          </div>
+        )}
         {/* Connection controls when idle */}
-        {status === "idle" && (
+        {status === "idle" && !popoutOpen && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {!hasParams && (
               <div style={{ display: "flex", gap: 10 }}>
@@ -596,10 +647,13 @@ export default function View() {
 
             {/* Right controls */}
             <div style={s.controlGroup}>
+              {!popout && <button onClick={openPopout} style={s.controlBtn} title="Pop out window" aria-label="Open pop out window">
+                ⇱
+              </button>}
               <button onClick={toggleFullscreen} style={s.controlBtn}>
                 ⛶
               </button>
-              <button onClick={stopViewing} style={s.disconnectBtn}>
+              <button onClick={popout ? () => window.close() : stopViewing} style={s.disconnectBtn} title={popout ? "Close window" : "Disconnect"}>
                 ✕
               </button>
             </div>
@@ -713,6 +767,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
   },
+  popoutRoot: { height: "100dvh", minHeight: 0 },
 
   /* ── Header ── */
   header: {
@@ -739,13 +794,24 @@ const s: Record<string, React.CSSProperties> = {
 
   /* ── Video Area ── */
   previewWrap: {
-    flex: 1,
+    flex: "0 1 auto",
+    width: "min(calc(100% - 40px), 960px)",
+    aspectRatio: "16 / 9",
+    maxHeight: "calc(100dvh - 150px)",
+    margin: "auto",
     position: "relative",
     background: "#050805",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
+  },
+  popoutPreviewWrap: {
+    flex: 1,
+    width: "100%",
+    maxHeight: "none",
+    aspectRatio: "auto",
+    margin: 0,
   },
   preview: {
     width: "100%",
@@ -853,6 +919,12 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
     flexWrap: "wrap",
+  },
+  popoutControls: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
   },
   controlGroup: {
     display: "flex",

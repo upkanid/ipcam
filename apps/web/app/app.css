@@ -59,6 +59,14 @@ html, body {
 .font-mono  { font-family: var(--mono); }
 .font-display { font-family: var(--display); }
 
+.viewer-preview-wrap:fullscreen {
+  width: 100% !important;
+  max-height: none !important;
+  height: 100% !important;
+  aspect-ratio: auto !important;
+  margin: 0 !important;
+}
+
 /* ─── Share page responsive ──────────────────────── */
 
 .share-controls button,
