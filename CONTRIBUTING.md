@@ -28,6 +28,6 @@ npm run dev:desktop
 
 ## Architecture Notes
 
-- Cloud mode uses the hosted web server only for signaling. Media is sent peer-to-peer by WebRTC when NAT traversal succeeds.
+- Cloud mode uses the hosted Cloudflare Worker and Durable Object only for signaling. Media is sent peer-to-peer by WebRTC when NAT traversal succeeds.
 - LAN mode uses the desktop app's local WebSocket signaling server on port `3717`.
 - If you change the signaling message contract, update both web routes and desktop renderer code.

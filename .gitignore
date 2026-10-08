@@ -9,4 +9,6 @@ out
 .react-router
 build
 apps/web/server.js
+.wrangler
+.dev.vars*
 # package-lock.json is committed for CI reproducibility

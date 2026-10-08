@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "app/**/*",
+    "workers/**/*",
+    ".react-router/types/**/*"
+  ],
+  "exclude": [],
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "vite/client"]
+  }
+}

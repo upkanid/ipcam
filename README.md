@@ -64,18 +64,24 @@ To output as a virtual camera, install [OBS Virtual Camera](https://obsproject.c
 
 The phone-side UI is hosted at **[ipcam.upkan.id](https://ipcam.upkan.id)** — no install required. Always opened via QR code from the desktop app.
 
-### Self-hosting
+### Deployment
 
 ```bash
 # Build
 npm run build:web
 
-# Run (Docker)
-docker build -f apps/web/Dockerfile -t ipcam-web .
-docker run -p 3000:3000 ipcam-web
+# Preview locally in the Workers runtime
+npm run preview:web
+
+# Authenticate once, then deploy with Wrangler
+npx wrangler login
+npm run deploy:web
 ```
 
-Or deploy the image to any Node-capable host (Coolify, Railway, Fly, etc.). The web server is a plain Express + WebSocket process — no database, no external dependencies.
+The web app runs on Cloudflare Workers. WebSocket signaling is coordinated by a
+Durable Object per room, so the relay remains consistent when requests are
+handled by different Worker instances. Configure `ipcam.upkan.id` as the
+Worker's custom domain in Cloudflare after the first deploy.
 
 ---
 
@@ -113,8 +119,8 @@ For local dev, change the **Web App URL** in the desktop settings panel from `ht
 
 | | |
 |---|---|
-| Web | React Router v7 (SSR), Express, WebSocket |
+| Web | React Router v7 (SSR), Cloudflare Workers, Durable Objects |
 | Desktop | Electron, electron-vite, React |
 | Streaming | WebRTC (getUserMedia → RTCPeerConnection) |
 | Packaging | electron-builder — DMG / NSIS / AppImage |
-| Deploy | Docker → Coolify |
+| Deploy | Wrangler → Cloudflare Workers |
