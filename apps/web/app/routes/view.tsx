@@ -69,12 +69,20 @@ export default function View() {
   const [videoRatio, setVideoRatio] = useState(16 / 9);
   const [target, setTarget] = useState(room || paramIp || "");
   const [popoutOpen, setPopoutOpen] = useState(false);
+  const [obsUrl, setObsUrl] = useState("");
   const [trackState, setTrackState] = useState<{
     audio: boolean;
     video: boolean;
   }>({ audio: false, video: false });
 
   const hasParams = !!(room || paramIp);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("popout");
+    url.searchParams.set("obs", "1");
+    setObsUrl(hasParams ? url.toString() : "");
+  }, [room, paramIp, hasParams]);
 
   // ── Auto-connect on mount/param change ─────────────────
   useEffect(() => {
@@ -381,8 +389,11 @@ export default function View() {
     }
 
     const url = new URL(window.location.href);
+    url.searchParams.delete("obs");
     url.searchParams.set("popout", "1");
-    const popup = window.open(url.toString(), "ipcam-view-popout", "popup=yes,width=800,height=520,resizable=yes");
+    const width = Math.round(Math.min(960, 720 * videoRatio));
+    const height = Math.round(width / videoRatio);
+    const popup = window.open(url.toString(), "ipcam-view-popout", `popup=yes,width=${width},height=${height},resizable=yes`);
     if (!popup) {
       setError("Pop out diblokir browser. Izinkan pop up untuk situs ini lalu coba lagi.");
       return;
@@ -417,9 +428,10 @@ export default function View() {
   const isActive = isConnected || isWaiting || reconnecting;
 
   // ── OBS Mode ───────────────────────────────────────────
-  if (obs) {
+  if (obs || popout) {
     return (
-      <div style={s.obsRoot}>
+      <div style={{ ...s.obsRoot, background: popout ? "#000" : "transparent" }}>
+        <style>{`html, body { background: ${popout ? "#000" : "transparent"}; overflow: hidden; }`}</style>
         <video
           ref={videoRef}
           autoPlay
@@ -428,12 +440,6 @@ export default function View() {
           onLoadedMetadata={handleLoadedMetadata}
           style={s.obsVideo}
         />
-        {isConnected && <div style={s.obsDot} />}
-        {isWaiting && (
-          <div style={s.obsWaiting}>
-            <span style={s.obsWaitingText}>CONNECTING...</span>
-          </div>
-        )}
       </div>
     );
   }
@@ -507,6 +513,26 @@ export default function View() {
 
       {/* ── Controls ───────────────────────────────────── */}
       <div style={s.controls}>
+        {obsUrl && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={s.controlGroup}>
+              <button onClick={openPopout} style={{ ...s.controlBtn, width: "auto", padding: "0 12px" }}>
+                Pop-up bersih
+              </button>
+              <span style={s.stat}>Video saja untuk OBS Window Capture</span>
+            </div>
+            <label style={s.stat}>
+              URL OBS Browser Source
+              <input
+                aria-label="URL OBS Browser Source"
+                readOnly
+                value={obsUrl}
+                onFocus={(event) => event.currentTarget.select()}
+                style={{ ...s.ipInput, padding: "8px 10px", fontSize: 12, marginTop: 6 }}
+              />
+            </label>
+          </div>
+        )}
         {popoutOpen && (
           <div style={s.popoutControls}>
             <span style={s.stat}>STREAM OPEN IN A SEPARATE WINDOW</span>
@@ -1089,13 +1115,15 @@ const s: Record<string, React.CSSProperties> = {
 
   /* ── OBS Mode ── */
   obsRoot: {
+    position: "fixed",
+    inset: 0,
     width: "100vw",
     height: "100vh",
     background: "transparent",
     overflow: "hidden",
-    position: "relative",
   },
   obsVideo: {
+    display: "block",
     width: "100vw",
     height: "100vh",
     objectFit: "contain",
